@@ -1,0 +1,53 @@
+# --- Operating System Files ---
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+
+# --- IDE & Editor Configurations ---
+.idea/
+.vscode/
+*.swp
+*.swo
+*.sublime-project
+*.sublime-workspace
+.project
+.classpath
+.settings/
+
+# --- Environment Variables (Security) ---
+# ALWAYS ignore .env files to prevent leaking secrets
+.env
+.env.local
+.env.*.local
+
+# --- Logs & Diagnostics ---
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+debug.log
+
+# --- Dependencies & Build Outputs ---
+# Node.js
+node_modules/
+dist/
+build/
+coverage/
+
+# Python
+__pycache__/
+*.py[cod]
+*.so
+venv/
+env/
+.venv/
+
+# --- Backup Files ---
+*.bak
+*.tmp
+*.temp
