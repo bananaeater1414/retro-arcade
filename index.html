@@ -1,0 +1,2622 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Gabe's Arcade</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Google Fonts: Press Start 2P for Arcade vibes -->
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+    <!-- Lucide Icons for UI elements -->
+    <script src="https://unpkg.com/lucide@0.469.0/dist/umd/lucide.min.js"></script>
+
+    <style>
+        :root {
+            --neon-red: #ff0055;
+            --neon-blue: #00f3ff;
+            --neon-green: #00ff99;
+            --neon-yellow: #ffee00;
+            --neon-purple: #b026ff;
+            --bg-dark: #090910;
+            --panel-bg: #13131f;
+        }
+        body {
+            font-family: 'Share Tech Mono', monospace;
+            background-color: var(--bg-dark);
+            color: #e0e0e0;
+            user-select: none; /* Prevent text selection on touch */
+        }
+        h1, h2, h3, .arcade-font {
+            font-family: 'Press Start 2P', cursive;
+        }
+        
+        /* CRT Effect */
+        .crt-overlay {
+            background: 
+                linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%),
+                linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+            background-size: 100% 3px, 3px 100%;
+            pointer-events: none;
+        }
+
+        /* Custom scrollbar */
+        textarea::-webkit-scrollbar, div::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        textarea::-webkit-scrollbar-track, div::-webkit-scrollbar-track {
+            background: #1a1a2e; 
+        }
+        textarea::-webkit-scrollbar-thumb, div::-webkit-scrollbar-thumb {
+            background: var(--neon-red);
+            border-radius: 4px;
+        }
+
+        .neon-text { text-shadow: 0 0 5px var(--neon-red), 0 0 10px var(--neon-red); }
+        .neon-border { box-shadow: 0 0 5px var(--neon-blue), 0 0 10px var(--neon-blue); }
+        .matrix-text { text-shadow: 0 0 5px #00ff00, 0 0 10px #00ff00; color: #00ff00; }
+        
+        canvas {
+            image-rendering: pixelated; 
+        }
+
+        /* Touch Controls */
+        .d-pad-btn {
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.1s;
+        }
+        .d-pad-btn:active, .d-pad-btn.active {
+            background: rgba(255, 0, 85, 0.5);
+            border-color: var(--neon-red);
+        }
+        .action-btn {
+            background: rgba(255, 0, 85, 0.2);
+            border: 2px solid var(--neon-red);
+            border-radius: 50%;
+            width: 60px;
+            height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Press Start 2P';
+            font-size: 12px;
+        }
+        .action-btn:active, .action-btn.active {
+            background: var(--neon-red);
+            color: black;
+            transform: scale(0.95);
+        }
+
+        /* Fade Animation */
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .animate-fade-in { animation: fadeIn 0.5s ease-out forwards; }
+
+        /* Loading Spinner */
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid var(--neon-blue);
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="h-[100dvh] w-screen flex flex-col relative overflow-hidden">
+
+    <!-- CRT Overlay -->
+    <div class="crt-overlay absolute inset-0 z-50 h-full w-full pointer-events-none"></div>
+
+    <!-- Notifications Container -->
+    <div id="notification-area" class="absolute bottom-4 left-1/2 transform -translate-x-1/2 z-[60] flex flex-col gap-2 w-full max-w-md px-4 pointer-events-none"></div>
+
+    <!-- Global Error Handler UI -->
+    <div id="system-error" class="hidden absolute inset-0 z-[70] bg-black bg-opacity-90 flex items-center justify-center p-4">
+        <div class="border-2 border-red-500 bg-black p-6 rounded max-w-lg w-full shadow-[0_0_20px_rgba(255,0,0,0.5)]">
+            <h2 class="arcade-font text-xl mb-4 text-red-500 animate-pulse">SYSTEM FAILURE</h2>
+            <div id="error-content" class="text-left font-mono text-xs text-red-300 mb-4 bg-red-900/20 p-4 rounded overflow-auto max-h-40"></div>
+            <button onclick="window.location.reload()" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded arcade-font text-xs w-full">REBOOT SYSTEM</button>
+        </div>
+    </div>
+
+    <!-- SECURITY LOGIN SCREEN -->
+    <div id="login-screen" class="absolute inset-0 z-[100] bg-[#090910] flex flex-col items-center justify-center">
+        <div class="crt-overlay absolute inset-0 pointer-events-none"></div>
+        <h1 class="text-3xl md:text-5xl text-[#ff0055] neon-text tracking-widest mb-8 arcade-font text-center px-4">GABE'S ARCADE</h1>
+        
+        <div class="bg-[#13131f] p-8 rounded border-2 border-[#00f3ff] shadow-[0_0_20px_rgba(0,243,255,0.3)] flex flex-col gap-4 w-80 relative z-10">
+            <div class="flex justify-center mb-2">
+                <i data-lucide="lock" class="text-[#00f3ff] w-12 h-12"></i>
+            </div>
+            <p class="text-[#00f3ff] font-mono text-xs text-center mb-2">SYSTEM LOCKED</p>
+            <input type="password" id="password-input" class="bg-black text-[#00ff99] border border-[#00f3ff] p-3 rounded font-mono text-center outline-none focus:shadow-[0_0_10px_#00ff99] placeholder-gray-700" placeholder="ENTER PASSWORD">
+            <button id="login-btn" class="bg-[#ff0055] hover:bg-red-600 text-white py-3 rounded arcade-font text-xs shadow-[0_0_10px_#ff0055] transition-transform active:scale-95 mt-2">ACCESS</button>
+            <p id="login-error" class="text-red-500 font-mono text-xs text-center hidden mt-2">ACCESS DENIED</p>
+        </div>
+        <p class="text-gray-600 font-mono text-[10px] mt-8">SECURE CONNECTION v1.1</p>
+    </div>
+
+    <!-- Header -->
+    <header class="flex-shrink-0 p-4 border-b-2 border-gray-800 bg-[#0f1016] shadow-lg z-10 flex justify-between items-center relative">
+        <div class="flex items-center gap-3">
+            <i data-lucide="gamepad-2" class="text-[#ff0055] w-8 h-8"></i>
+            <h1 class="text-xl md:text-2xl text-[#ff0055] neon-text tracking-widest hidden md:block">GABE'S ARCADE</h1>
+            <h1 class="text-xl text-[#ff0055] neon-text tracking-widest md:hidden">ARCADE</h1>
+        </div>
+        <nav class="flex gap-2">
+            <button onclick="window.app.showHome()" class="px-3 py-1 hover:text-[#00f3ff] transition-colors text-sm">PLAY</button>
+            <button onclick="window.app.showCreator()" class="bg-[#ff0055] hover:bg-red-600 text-white px-4 py-2 rounded shadow transition arcade-font text-[10px] flex items-center gap-2">
+                <i data-lucide="code" class="w-4 h-4"></i> CREATE
+            </button>
+        </nav>
+    </header>
+
+    <!-- Main Content Area -->
+    <main id="app-container" class="flex-grow relative z-10 overflow-hidden bg-[#090910]">
+        <!-- Initial Loading State -->
+        <div class="absolute inset-0 flex flex-col items-center justify-center">
+            <div class="text-[#00f3ff] text-4xl mb-4 animate-bounce">
+                <i data-lucide="cpu" class="w-16 h-16"></i>
+            </div>
+            <p class="text-xl animate-pulse text-[#ff0055] arcade-font">INITIALIZING...</p>
+        </div>
+    </main>
+
+    <!-- Script Block -->
+    <script type="module">
+        // Updated Firebase imports to stable 10.13.1
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, onSnapshot, query, doc, updateDoc, setLogLevel } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore.js";
+
+        // Set Firebase logging level to Debug
+        setLogLevel('Debug');
+
+        // --- Login Logic ---
+        const loginScreen = document.getElementById('login-screen');
+        const passInput = document.getElementById('password-input');
+        const loginBtn = document.getElementById('login-btn');
+        const loginError = document.getElementById('login-error');
+        
+        let isAdminMode = false;
+
+        function attemptLogin() {
+            if (passInput.value === "Gabe") {
+                isAdminMode = false;
+                loginScreen.style.transition = "opacity 0.5s ease-out";
+                loginScreen.style.opacity = "0";
+                setTimeout(() => loginScreen.remove(), 500);
+            } else if (passInput.value === "admin") {
+                isAdminMode = true;
+                const note = document.getElementById('notification-area');
+                // Admin entry effect
+                document.body.style.backgroundColor = 'black';
+                loginScreen.innerHTML = `<h1 class="text-4xl text-green-500 font-mono animate-pulse">ACCESS GRANTED: LEVEL 99</h1>`;
+                setTimeout(() => {
+                    loginScreen.remove();
+                    window.app.showHome();
+                }, 1500);
+            } else {
+                loginError.classList.remove('hidden');
+                loginError.classList.add('animate-pulse');
+                passInput.value = "";
+                passInput.focus();
+                passInput.style.borderColor = 'red';
+                setTimeout(() => passInput.style.borderColor = '#00f3ff', 500);
+            }
+        }
+
+        loginBtn.addEventListener('click', attemptLogin);
+        passInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') attemptLogin();
+        });
+        
+        passInput.focus();
+
+        // --- Configuration & Constants ---
+        const SECRET_GAMES = [
+            {
+                id: 'deltarune',
+                title: "DELTARUNE",
+                author: "TOBY FOX",
+                language: 'javascript',
+                description: "A legend of light and dark. Don't forget.",
+                code: `// --- DELTARUNE ---
+// Ported to Gabe's Arcade
+
+const canvas = document.getElementById('gameCanvas');
+const container = canvas.parentElement;
+canvas.style.display = 'none';
+
+// Create safe sandbox iframe
+const iframe = document.createElement('iframe');
+iframe.style.width = '100%';
+iframe.style.height = '100%';
+iframe.style.border = 'none';
+iframe.style.background = '#000';
+container.appendChild(iframe);
+
+const loadGame = async () => {
+    try {
+        const baseUrl = "https://cdn.jsdelivr.net/gh/genizy/web-port@main/deltarune/";
+        const res = await fetch(baseUrl + "index.html?t=" + Date.now());
+        let html = await res.text();
+        
+        const doc = iframe.contentDocument || iframe.contentWindow.document;
+        
+        // Critical: Inject Base tag so assets load from CDN
+        if (!html.includes('<base')) {
+            html = html.replace('<head>', \`<head><base href="\${baseUrl}">\`);
+        }
+
+        // Write to iframe
+        doc.open();
+        doc.write(html);
+        doc.close();
+
+        // Ensure focus
+        iframe.onload = () => {
+            iframe.contentWindow.focus();
+            // Dispatch a resize event to ensure canvas sizes correctly
+            iframe.contentWindow.dispatchEvent(new Event('resize'));
+        };
+        
+        // Add click listener to refocus if user clicks away
+        iframe.contentWindow.addEventListener('blur', () => {
+             setTimeout(() => iframe.contentWindow.focus(), 100);
+        });
+        
+    } catch(e) {
+        console.error(e);
+        container.innerHTML = '<div class="text-red-500 font-mono p-4 flex items-center justify-center h-full">ERROR: DATALINK INTERRUPTED.</div>';
+    }
+};
+
+loadGame();
+
+window.gameLoop = function() {};`
+            },
+            {
+                id: 'retro-bowl',
+                title: "RETRO BOWL",
+                author: "NEW STAR",
+                language: 'javascript',
+                description: "8-bit Football Manager. Lead your team to victory.",
+                code: `// --- RETRO BOWL ---
+// Ported to Gabe's Arcade
+
+// 1. Setup DOM
+const canvas = document.getElementById('gameCanvas');
+const container = canvas.parentElement;
+canvas.style.display = 'none'; // Hide default canvas
+
+// Create Game Container
+const rbDiv = document.createElement('div');
+rbDiv.id = 'gm4html5_div_id';
+rbDiv.style.width = '100%';
+rbDiv.style.height = '100%';
+rbDiv.style.display = 'flex';
+rbDiv.style.justifyContent = 'center';
+rbDiv.style.alignItems = 'center';
+rbDiv.style.background = '#000';
+container.appendChild(rbDiv);
+
+// Add Loading Image required by GameMaker
+const img = document.createElement('img');
+img.id = 'GM4HTML5_loadingscreen';
+img.src = "https://274079163-174037128449362058.preview.editmysite.com/uploads/b/139890129-899796311729593176/files/html5game/splash.png";
+img.style.display = 'none';
+rbDiv.appendChild(img);
+
+// Create Game Canvas
+const rbCanvas = document.createElement('canvas');
+rbCanvas.id = 'canvas';
+rbCanvas.width = 853;
+rbCanvas.height = 480;
+// Make it responsive within the container
+rbCanvas.style.maxWidth = '100%';
+rbCanvas.style.maxHeight = '100%';
+rbCanvas.style.objectFit = 'contain';
+rbDiv.appendChild(rbCanvas);
+
+// 2. Load Game Script
+const script = document.createElement('script');
+script.type = 'text/javascript';
+script.src = "https://274079163-174037128449362058.preview.editmysite.com/uploads/b/139890129-899796311729593176/files/html5game/RetroBowl.js";
+
+script.onload = () => {
+    // Shim PokiSDK to prevent errors
+    window.PokiSDK = {
+        init: () => Promise.resolve(),
+        gameLoadingFinished: () => {},
+        gameplayStart: () => {},
+        gameplayStop: () => {},
+        commercialBreak: () => Promise.resolve(),
+        rewardedBreak: () => Promise.resolve(true),
+        displayAd: () => {},
+        destroyAd: () => {}
+    };
+    window.PokiSDK_OK = true; // Pretend it's okay
+    
+    // Start GameMaker
+    if (typeof GameMaker_Init !== 'undefined') {
+        GameMaker_Init();
+    }
+};
+document.body.appendChild(script);
+
+// Keep engine alive
+window.gameLoop = function() {};`
+            },
+            {
+                id: 'geometry-dash',
+                title: "GEOMETRY DASH",
+                author: "ROBTOP",
+                language: 'javascript',
+                description: "Rhythm-based platformer. Jump and fly through danger.",
+                code: `// --- GEOMETRY DASH LITE ---
+// Ported to Gabe's Arcade
+
+// 1. Setup DOM for Unity
+// We hijack the game canvas container
+const canvas = document.getElementById('gameCanvas');
+const container = canvas.parentElement;
+
+// Hide default canvas
+canvas.style.display = 'none';
+
+// Create Unity Container
+const unityDiv = document.createElement('div');
+unityDiv.id = 'unity-div';
+unityDiv.style.width = '100%';
+unityDiv.style.height = '100%';
+unityDiv.style.background = '#000';
+unityDiv.style.position = 'absolute';
+unityDiv.style.top = '0';
+unityDiv.style.left = '0';
+unityDiv.innerHTML = '<div style="color:white; display:flex; justify-content:center; align-items:center; height:100%; flex-direction:column;"><div class="loader mb-4"></div><p style="font-family:monospace">LOADING ASSETS...</p></div>';
+container.appendChild(unityDiv);
+
+// 2. Set Base URL for Assets
+const baseUrl = "https://rawcdn.githack.com/genizy/google-class/main/gdlite/";
+const base = document.createElement('base');
+base.href = baseUrl;
+document.head.appendChild(base);
+
+// 3. Load Unity Loader
+const script = document.createElement('script');
+script.src = "Build/UnityLoader.js"; // Relative to base now
+
+script.onload = () => {
+    // Instantiate
+    window.UnityLoader.instantiate("unity-div", "Build/GeometryDashLite.json", {
+        onProgress: (gameInstance, progress) => {
+            if (progress >= 1) {
+                // Game Loaded
+            }
+        }
+    });
+};
+document.body.appendChild(script);
+
+// 4. Auto-click "OK" helper
+const clickTimer = setInterval(() => {
+    const buttons = document.getElementsByTagName('button');
+    for (let i = 0; i < buttons.length; i++) {
+        if (buttons[i].innerText === "OK") {
+            buttons[i].click();
+        }
+    }
+}, 1000);
+
+// Keep the loop running to prevent engine errors
+window.gameLoop = function() {
+    // No-op
+};`
+            },
+            {
+                id: 'neon-wasteland',
+                title: "NEON WASTELAND",
+                author: "ADMIN",
+                language: 'javascript',
+                description: "Infinite Procedural RPG. Explore the sectors.",
+                code: `// --- NEON WASTELAND ---
+// Infinite Procedural World
+
+let player = { x: 0, y: 0, speed: 6 };
+let cam = { x: 0, y: 0 };
+const TILE_SIZE = 40;
+
+// Pseudo-random number generator for consistent world
+function hash(x, y) {
+    let s = Math.sin(x * 12.9898 + y * 78.233) * 43758.5453123;
+    return s - Math.floor(s);
+}
+
+function getBiome(val) {
+    if (val < 0.2) return { c: '#0f1016', n: 'VOID' }; // Deep dark
+    if (val < 0.4) return { c: '#1a1a2e', n: 'WASTELAND' }; // Dark Blue
+    if (val < 0.6) return { c: '#16213e', n: 'PLAINS' }; // Lighter Blue
+    if (val < 0.8) return { c: '#0f3460', n: 'CITY OUTSKIRTS' }; // Blueish
+    return { c: '#533483', n: 'NEON CITY' }; // Purple
+}
+
+window.gameLoop = function() {
+    clear('#000');
+
+    // Input
+    if (keys.ArrowUp) player.y -= player.speed;
+    if (keys.ArrowDown) player.y += player.speed;
+    if (keys.ArrowLeft) player.x -= player.speed;
+    if (keys.ArrowRight) player.x += player.speed;
+
+    // Camera follow
+    cam.x = player.x - width / 2;
+    cam.y = player.y - height / 2;
+
+    // Render Tiles (Only visible ones)
+    let startCol = Math.floor(cam.x / TILE_SIZE);
+    let endCol = startCol + (width / TILE_SIZE) + 1;
+    let startRow = Math.floor(cam.y / TILE_SIZE);
+    let endRow = startRow + (height / TILE_SIZE) + 1;
+
+    let currentBiome = 'UNKNOWN';
+
+    for (let c = startCol; c <= endCol; c++) {
+        for (let r = startRow; r <= endRow; r++) {
+            // Generate terrain value
+            // Zoom out the noise by dividing coordinates
+            let noise = hash(Math.floor(c/5), Math.floor(r/5)); 
+            // Add detail
+            let detail = hash(c, r) * 0.2;
+            let val = (noise + detail) / 1.2;
+            
+            let biome = getBiome(val);
+            
+            // Draw Tile
+            rect(c * TILE_SIZE - cam.x, r * TILE_SIZE - cam.y, TILE_SIZE + 1, TILE_SIZE + 1, biome.c);
+            
+            // Random details (Buildings/Trees)
+            if (hash(c, r) > 0.95) {
+                let col = val > 0.8 ? '#00f3ff' : '#000';
+                rect(c * TILE_SIZE - cam.x + 10, r * TILE_SIZE - cam.y + 10, 20, 20, col);
+            }
+
+            // Check player biome
+            if (c === Math.floor(player.x/TILE_SIZE) && r === Math.floor(player.y/TILE_SIZE)) {
+                currentBiome = biome.n;
+            }
+        }
+    }
+
+    // Player
+    rect(width/2 - 10, height/2 - 10, 20, 20, '#fff');
+    
+    // UI
+    rect(0, 0, width, 70, 'rgba(0,0,0,0.8)');
+    text("NEON WASTELAND [OPEN WORLD]", 20, 30, 20, "#fff");
+    text("COORDS: " + Math.floor(player.x) + ", " + Math.floor(player.y), 20, 55, 12, "#00ff99");
+    text("SECTOR: " + currentBiome, 250, 55, 12, "#ff0055");
+};`
+            },
+            {
+                id: 'void-drifter',
+                title: "VOID DRIFTER",
+                author: "ADMIN",
+                language: 'javascript',
+                description: "Infinite Space Sim. Physics flight & planets.",
+                code: `// --- VOID DRIFTER ---
+// Infinite Space Exploration
+
+let ship = { x: 0, y: 0, vx: 0, vy: 0, ang: 0, fuel: 1000 };
+const STARS = 200;
+let stars = [];
+
+// Init Stars
+for(let i=0; i<STARS; i++) stars.push({x: Math.random()*width, y: Math.random()*height, z: Math.random()});
+
+window.gameLoop = function() {
+    clear('#050505');
+
+    // Physics
+    if (keys.ArrowUp) {
+        ship.vx += Math.cos(ship.ang) * 0.1;
+        ship.vy += Math.sin(ship.ang) * 0.1;
+        ship.fuel -= 0.5;
+        // Thruster particle
+        if(Math.random()>0.5) circle(width/2 - Math.cos(ship.ang)*20, height/2 - Math.sin(ship.ang)*20, 3, '#ffa500');
+    }
+    if (keys.ArrowLeft) ship.ang -= 0.05;
+    if (keys.ArrowRight) ship.ang += 0.05;
+
+    ship.x += ship.vx;
+    ship.y += ship.vy;
+    
+    // Starfield (Parallax)
+    stars.forEach(s => {
+        let sx = (s.x - ship.x * s.z) % width;
+        let sy = (s.y - ship.y * s.z) % height;
+        if(sx < 0) sx += width;
+        if(sy < 0) sy += height;
+        rect(sx, sy, s.z*2, s.z*2, '#fff');
+    });
+
+    // Procedural Planets
+    // Grid based generation to create persistent planets
+    let gridSize = 3000;
+    let gx = Math.floor(ship.x / gridSize);
+    let gy = Math.floor(ship.y / gridSize);
+
+    // Check surrounding grids
+    for(let i = -1; i <= 1; i++) {
+        for(let j = -1; j <= 1; j++) {
+            let cx = gx + i;
+            let cy = gy + j;
+            // Hash for consistent generation
+            let h = Math.sin(cx * 12.9898 + cy * 78.233) * 43758.5453123;
+            let rand = h - Math.floor(h);
+            
+            // Helper for 2nd random num
+            let h2 = Math.sin(cx * 12.9898 + cy * 78.233 + 100) * 43758.5453123;
+            let rand2 = Math.abs(h2 - Math.floor(h2));
+
+            if (rand > 0.5) { // 50% chance of planet in sector
+                let size = 100 + rand * 300;
+                let px = cx * gridSize + (rand * gridSize);
+                let py = cy * gridSize + (rand2 * gridSize);
+                let color = \`hsl(\${rand * 360}, 70%, 50%)\`;
+                
+                // Draw Planet relative to ship
+                let screenX = px - ship.x + width/2;
+                let screenY = py - ship.y + height/2;
+                
+                // Only draw if on screen (with margin)
+                if (screenX > -size && screenX < width+size && screenY > -size && screenY < height+size) {
+                    circle(screenX, screenY, size, color);
+                    // Atmosphere
+                    ctx.globalAlpha = 0.3;
+                    circle(screenX, screenY, size+20, color);
+                    ctx.globalAlpha = 1.0;
+                    
+                    text(\`PLANET-\${Math.floor(rand*1000)}\`, screenX - 40, screenY - size - 20, 12, '#aaa');
+                }
+                
+                // Simple minimap indicator (optional, maybe complicated to render right)
+            }
+        }
+    }
+
+    // Draw Ship
+    ctx.save();
+    ctx.translate(width/2, height/2);
+    ctx.rotate(ship.ang);
+    
+    // Hull
+    ctx.beginPath();
+    ctx.moveTo(15, 0);
+    ctx.lineTo(-10, 10);
+    ctx.lineTo(-5, 0);
+    ctx.lineTo(-10, -10);
+    ctx.closePath();
+    ctx.fillStyle = '#00f3ff';
+    ctx.fill();
+    
+    ctx.restore();
+
+    // UI
+    text("SPEED: " + Math.floor(Math.hypot(ship.vx, ship.vy)*10) + " km/s", 20, 30, 15, '#fff');
+    text("POS: " + Math.floor(ship.x/100) + " : " + Math.floor(ship.y/100), 20, 50, 15, '#fff');
+    text("Arrows to Thrust/Turn", 20, height - 20, 12, '#888');
+};`
+            },
+            {
+                id: 'raycaster-3d',
+                title: "PROJECT: RAYCASTER",
+                author: "ADMIN",
+                language: 'javascript',
+                description: "Top Secret 3D Engine. Use Arrows to Move.",
+                code: `// --- RAYCASTER 3D ENGINE ---
+// Use Arrows to Move.
+
+const mapSize = 16;
+// 1 = Wall, 0 = Empty
+const map = [
+  1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
+  1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,
+  1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,
+  1,0,0,0,1,1,1,0,0,1,0,0,0,0,0,1,
+  1,0,0,0,1,0,1,0,0,1,0,0,0,0,0,1,
+  1,0,0,0,1,0,1,0,0,1,0,0,0,0,0,1,
+  1,0,0,0,0,0,0,0,0,1,0,0,0,0,0,1,
+  1,0,1,0,0,0,0,0,0,0,0,0,0,0,0,1,
+  1,0,1,0,0,0,0,0,0,0,0,0,0,0,0,1,
+  1,0,1,0,0,0,0,0,0,0,0,0,0,0,0,1,
+  1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,
+  1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,
+  1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,
+  1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,
+  1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,
+  1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1
+];
+
+let player = { x: 3.5, y: 3.5, dir: 0, rot: 0, speed: 0, moveSpeed: 0.08, rotSpeed: 0.05 };
+
+function castRays() {
+    // Ceiling / Floor
+    rect(0, 0, width, height/2, '#333');
+    rect(0, height/2, width, height/2, '#555');
+
+    // Raycast
+    for (let x = 0; x < width; x+=4) { // Resolution 4px
+        let cameraX = 2 * x / width - 1;
+        let rayDirX = Math.cos(player.dir) + Math.cos(player.dir + 1.57) * 0.66 * cameraX;
+        let rayDirY = Math.sin(player.dir) + Math.sin(player.dir + 1.57) * 0.66 * cameraX;
+
+        let mapX = Math.floor(player.x);
+        let mapY = Math.floor(player.y);
+
+        let sideDistX, sideDistY;
+        let deltaDistX = Math.abs(1 / rayDirX);
+        let deltaDistY = Math.abs(1 / rayDirY);
+        let perpWallDist;
+        let stepX, stepY;
+        let hit = 0;
+        let side;
+
+        if (rayDirX < 0) { stepX = -1; sideDistX = (player.x - mapX) * deltaDistX; }
+        else { stepX = 1; sideDistX = (mapX + 1.0 - player.x) * deltaDistX; }
+        
+        if (rayDirY < 0) { stepY = -1; sideDistY = (player.y - mapY) * deltaDistY; }
+        else { stepY = 1; sideDistY = (mapY + 1.0 - player.y) * deltaDistY; }
+
+        while (hit === 0) {
+            if (sideDistX < sideDistY) { sideDistX += deltaDistX; mapX += stepX; side = 0; }
+            else { sideDistY += deltaDistY; mapY += stepY; side = 1; }
+            
+            if(map[mapY * mapSize + mapX] > 0) hit = 1;
+        }
+
+        if (side === 0) perpWallDist = (mapX - player.x + (1 - stepX) / 2) / rayDirX;
+        else perpWallDist = (mapY - player.y + (1 - stepY) / 2) / rayDirY;
+
+        let lineHeight = Math.floor(height / perpWallDist);
+        let drawStart = -lineHeight / 2 + height / 2;
+        
+        // Color based on distance (fog) & side
+        let cVal = Math.max(50, 255 - perpWallDist * 20);
+        if(side === 1) cVal *= 0.7; // Shading
+        let color = \`rgb(\${cVal}, 0, \${cVal*0.5})\`;
+        
+        rect(x, drawStart, 4, lineHeight, color);
+    }
+}
+
+window.gameLoop = function() {
+    clear('#000');
+    
+    // Input
+    if (keys.ArrowLeft) player.dir -= player.rotSpeed;
+    if (keys.ArrowRight) player.dir += player.rotSpeed;
+    
+    let moveStep = 0;
+    if (keys.ArrowUp) moveStep = player.moveSpeed;
+    if (keys.ArrowDown) moveStep = -player.moveSpeed;
+    
+    if (moveStep !== 0) {
+        let newX = player.x + Math.cos(player.dir) * moveStep;
+        let newY = player.y + Math.sin(player.dir) * moveStep;
+        if(map[Math.floor(newY) * mapSize + Math.floor(newX)] === 0) {
+            player.x = newX;
+            player.y = newY;
+        }
+    }
+
+    castRays();
+    
+    // Mini-map
+    rect(10, 10, mapSize*5, mapSize*5, 'rgba(0,0,0,0.5)');
+    for(let y=0; y<mapSize; y++) {
+        for(let x=0; x<mapSize; x++) {
+            if(map[y*mapSize+x] > 0) rect(10 + x*5, 10 + y*5, 5, 5, '#fff');
+        }
+    }
+    rect(10 + player.x*5, 10 + player.y*5, 3, 3, 'red');
+    
+    text("PROJECT: RAYCASTER", 10, height - 20, 20, '#0f0');
+};`
+            },
+            {
+                id: 'fluid-sim',
+                title: "QUANTUM FLUID",
+                author: "ADMIN",
+                language: 'javascript',
+                description: "Simulation of 500 interactive particles.",
+                code: `// --- PARTICLE FLUID ---
+const particles = [];
+const PARTICLE_COUNT = 500;
+
+for(let i=0; i<PARTICLE_COUNT; i++) {
+    particles.push({
+        x: Math.random() * width,
+        y: Math.random() * height,
+        vx: (Math.random() - 0.5) * 2,
+        vy: (Math.random() - 0.5) * 2,
+        color: \`hsl(\${Math.random()*60 + 180}, 100%, 50%)\`
+    });
+}
+
+window.gameLoop = function() {
+    // Trail effect
+    rect(0, 0, width, height, 'rgba(0,0,0,0.1)');
+    
+    // Mouse interaction
+    // We can assume center screen if no mouse data, or simple attraction to center
+    let tx = width/2;
+    let ty = height/2;
+    
+    if (keys.ArrowUp) ty = 0;
+    if (keys.ArrowDown) ty = height;
+    if (keys.ArrowLeft) tx = 0;
+    if (keys.ArrowRight) tx = width;
+
+    particles.forEach(p => {
+        // Physics
+        p.x += p.vx;
+        p.y += p.vy;
+        
+        // Boundaries
+        if (p.x < 0 || p.x > width) p.vx *= -1;
+        if (p.y < 0 || p.y > height) p.vy *= -1;
+        
+        // Attraction to target
+        let dx = tx - p.x;
+        let dy = ty - p.y;
+        let dist = Math.sqrt(dx*dx + dy*dy);
+        
+        if (keys.Space) {
+            // Repel
+            p.vx -= (dx/dist) * 0.5;
+            p.vy -= (dy/dist) * 0.5;
+        } else {
+            // Gentle Attract
+            p.vx += (dx/dist) * 0.05;
+            p.vy += (dy/dist) * 0.05;
+        }
+        
+        // Dampening
+        p.vx *= 0.99;
+        p.vy *= 0.99;
+        
+        // Draw
+        rect(p.x, p.y, 3, 3, p.color);
+    });
+    
+    text("QUANTUM FLUID SIMULATION", 20, 30, 15, "#00f3ff");
+    text("SPACE to Repel | ARROWS to Move Attractor", 20, height-20, 10, "#fff");
+};`
+            }
+        ];
+
+        const BUILT_IN_GAMES = [
+             {
+                id: 'sky-bound',
+                title: "Sky Bound",
+                author: "System_JS",
+                language: 'javascript',
+                description: "Vertical Obby: Climb the floating islands to the top! Arrows to move, SPACE to Jump.",
+                code: `
+// --- SKY BOUND (Vertical Edition) ---
+
+const GRAVITY = 0.6;
+const JUMP_FORCE = -13;
+const SPEED = 5;
+
+let state = {
+    player: { x: 50, y: 500, w: 20, h: 30, dx: 0, dy: 0, color: '#facc15', grounded: false },
+    camera: { y: 0 },
+    platforms: [
+        // Ground
+        { x: 0, y: 550, w: 800, h: 50, type: 'floor' },
+        
+        // The Climb
+        { x: 300, y: 450, w: 100, h: 20 },
+        { x: 100, y: 350, w: 100, h: 20 },
+        { x: 350, y: 250, w: 100, h: 20 },
+        { x: 600, y: 200, w: 100, h: 20 },
+        { x: 400, y: 100, w: 80, h: 20 },
+        { x: 150, y: 0, w: 80, h: 20 },
+        { x: 50, y: -100, w: 80, h: 20 },
+        { x: 250, y: -200, w: 80, h: 20 },
+        { x: 500, y: -250, w: 80, h: 20 },
+        { x: 700, y: -350, w: 60, h: 20 },
+        { x: 500, y: -450, w: 60, h: 20 },
+        { x: 300, y: -550, w: 60, h: 20 },
+        { x: 100, y: -650, w: 60, h: 20 },
+        { x: 300, y: -750, w: 60, h: 20 },
+        { x: 500, y: -850, w: 100, h: 20 }, // Final platform
+    ],
+    goal: { x: 530, y: -910, w: 40, h: 60, color: '#4ade80' },
+    won: false,
+    lost: false
+};
+
+window.gameLoop = function() {
+    // 1. Clear with native helper
+    clear('#0ea5e9'); // Sky blue
+
+    // Win/Loss Screens
+    if (state.won) {
+        text("SKY CONQUERED!", width/2, height/2, 40, '#fff');
+        text("Press SPACE to Restart", width/2, height/2 + 50, 20);
+        if (keys.Space) resetGame();
+        return;
+    }
+    if (state.lost) {
+        text("YOU FELL!", width/2, height/2, 40, '#fff');
+        text("Press SPACE to Retry", width/2, height/2 + 50, 20);
+        if (keys.Space) resetGame();
+        return;
+    }
+
+    let p = state.player;
+
+    // 2. Physics & Input
+    p.dy += GRAVITY;
+    p.dx = 0;
+    
+    if (keys.ArrowLeft) p.dx = -SPEED;
+    if (keys.ArrowRight) p.dx = SPEED;
+    
+    // Jump
+    if (keys.Space && p.grounded) {
+        p.dy = JUMP_FORCE;
+        p.grounded = false;
+    }
+
+    // X Collision
+    p.x += p.dx;
+    // Screen wrapping (optional, but fun for obbys)
+    if (p.x > width) p.x = -p.w;
+    if (p.x < -p.w) p.x = width;
+    
+    checkWallCollisions(p);
+
+    // Y Collision
+    p.y += p.dy;
+    p.grounded = false;
+    checkFloorCollisions(p);
+
+    // 3. Camera Logic (Follow Player Vertically)
+    // Target is to keep player in the middle-lower part of screen
+    let targetCamY = -p.y + height * 0.6;
+    // Smooth camera or hard set? Hard set is tighter for platformers
+    state.camera.y = targetCamY;
+    
+    // Clamp camera so we don't see below the floor too much
+    if (state.camera.y < 0) state.camera.y = 0;
+
+    // 4. Death Condition
+    // If player falls below the screen relative to camera
+    if (p.y > -state.camera.y + height + 100) state.lost = true;
+    if (p.y > 600) state.lost = true; // Absolute bottom fail safe
+
+    // Win Condition
+    if (rectIntersect(p, state.goal)) state.won = true;
+
+    // 5. Draw World
+    ctx.save();
+    ctx.translate(0, state.camera.y);
+
+    // Draw Clouds (Decor) - Using native circle
+    circle(100, 200, 50, 'rgba(255,255,255,0.3)');
+    circle(600, 0, 80);
+    circle(300, -400, 60);
+
+    // Platforms
+    state.platforms.forEach(plat => {
+        // Main block
+        rect(plat.x, plat.y, plat.w, plat.h, plat.type === 'floor' ? '#1e293b' : '#64748b');
+        // Top detail
+        rect(plat.x, plat.y, plat.w, 4, '#94a3b8');
+    });
+
+    // Goal
+    rect(state.goal.x, state.goal.y, state.goal.w, state.goal.h, state.goal.color);
+    rect(state.goal.x + 5, state.goal.y + 5, state.goal.w - 10, state.goal.h - 10, '#22c55e');
+
+    // Player
+    rect(p.x, p.y, p.w, p.h, p.color);
+    // Face
+    if (p.dx >= 0) {
+        rect(p.x + 12, p.y + 5, 4, 4, 'black'); // Right eye
+    } else {
+        rect(p.x + 4, p.y + 5, 4, 4, 'black'); // Left eye
+    }
+
+    ctx.restore();
+
+    // HUD (Score/Height) - Using native text
+    ctx.textAlign = 'left';
+    let heightScore = Math.max(0, Math.floor((500 - p.y) / 10));
+    text("Height: " + heightScore + "m", 20, 40, 20, '#fff');
+};
+
+function resetGame() {
+    state.player.x = 50;
+    state.player.y = 500;
+    state.player.dx = 0;
+    state.player.dy = 0;
+    state.camera.y = 0;
+    state.won = false;
+    state.lost = false;
+}
+
+function rectIntersect(r1, r2) {
+    return !(r2.x > r1.x + r1.w || 
+             r2.x + r2.w < r1.x || 
+             r2.y > r1.y + r1.h ||
+             r2.y + r2.h < r1.y);
+}
+
+function checkFloorCollisions(p) {
+    state.platforms.forEach(plat => {
+        if (p.x < plat.x + plat.w && p.x + p.w > plat.x) {
+            if (p.dy > 0 && p.y + p.h >= plat.y && p.y + p.h <= plat.y + p.dy + 10) { 
+                p.y = plat.y - p.h;
+                p.dy = 0;
+                p.grounded = true;
+            }
+            else if (p.dy < 0 && p.y <= plat.y + plat.h && p.y >= plat.y + plat.h + p.dy - 5) {
+                p.y = plat.y + plat.h;
+                p.dy = 0;
+            }
+        }
+    });
+}
+
+function checkWallCollisions(p) {
+    state.platforms.forEach(plat => {
+        if (p.y + p.h > plat.y && p.y < plat.y + plat.h) {
+            if (p.dx > 0 && p.x + p.w >= plat.x && p.x < plat.x + 10) {
+                p.x = plat.x - p.w;
+                p.dx = 0;
+            }
+            else if (p.dx < 0 && p.x <= plat.x + plat.w && p.x + p.w > plat.x + plat.w - 10) {
+                p.x = plat.x + plat.w;
+                p.dx = 0;
+            }
+        }
+    });
+}
+`
+            },
+            {
+                id: 'space-defenders',
+                title: "Space Defenders",
+                author: "Keele",
+                language: 'javascript',
+                description: "Survive & Upgrade! [M] for Market. Arrows to move, Space to shoot.",
+                code: `// --- SPACE DEFENDERS ---
+// This version uses standard ctx commands, 
+// check "Sky Bound" or "Simple Paint" for the new helper commands!
+
+// Game State
+let state = {
+    screen: 'MENU', // MENU, PLAY, MARKET, GAMEOVER
+    credits: 0,
+    score: 0,
+    player: { x: 400, y: 500, r: 15, hp: 3, maxHp: 3, dmg: 1, fireRate: 20, lastShot: 0, skin: '#0ea5e9' },
+    bullets: [],
+    enemies: [],
+    upgrades: { dmg: 0, rate: 0, hp: 0 },
+    frame: 0
+};
+
+// Constants
+const PRICES = { dmg: 500, rate: 750, hp: 1000 };
+
+// --- UTILS ---
+const dist = (x1,y1,x2,y2) => Math.hypot(x2-x1, y2-y1);
+
+// --- LOGIC ---
+function initGame() {
+    state.player.x = width/2;
+    state.player.y = height - 50;
+    state.player.hp = state.player.maxHp + state.upgrades.hp;
+    state.bullets = [];
+    state.enemies = [];
+    state.score = 0;
+    state.frame = 0;
+}
+
+window.gameLoop = function() {
+    clear('#0d1117');
+
+    // --- MENU SCREEN ---
+    if (state.screen === 'MENU') {
+        ctx.textAlign = 'center';
+        text("SPACE DEFENDERS", width/2, height/2 - 40, 30, '#38bdf8');
+        text("Press SPACE to Start", width/2, height/2 + 10, 15, '#fff');
+        text("Press M for Market", width/2, height/2 + 40, 15, '#fff');
+        
+        if (keys.Space) {
+            initGame();
+            state.screen = 'PLAY';
+        }
+        if (keys.KeyM) state.screen = 'MARKET';
+        return;
+    }
+
+    // --- MARKET SCREEN ---
+    if (state.screen === 'MARKET') {
+        rect(50, 50, width-100, height-100, '#161b22');
+        ctx.strokeStyle = '#38bdf8';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(50, 50, width-100, height-100);
+
+        ctx.textAlign = 'center';
+        text("MARKET", width/2, 90, 20, '#fff');
+        text("Credits: " + Math.floor(state.credits), width/2, 120, 20, '#facc15');
+
+        ctx.textAlign = 'left';
+        let y = 180;
+        
+        // Items
+        const dmgCost = PRICES.dmg + (state.upgrades.dmg * 200);
+        const rateCost = PRICES.rate + (state.upgrades.rate * 200);
+        const hpCost = PRICES.hp + (state.upgrades.hp * 200);
+
+        let c1 = (state.credits >= dmgCost) ? '#fff' : '#555';
+        text("[1] Weapon Power (Lvl "+state.upgrades.dmg+") - " + dmgCost + " Cr", 100, y, 12, c1);
+        
+        let c2 = (state.credits >= rateCost) ? '#fff' : '#555';
+        text("[2] Rapid Fire (Lvl "+state.upgrades.rate+") - " + rateCost + " Cr", 100, y+30, 12, c2);
+        
+        let c3 = (state.credits >= hpCost) ? '#fff' : '#555';
+        text("[3] Hull Strength (Lvl "+state.upgrades.hp+") - " + hpCost + " Cr", 100, y+60, 12, c3);
+
+        ctx.textAlign = 'center';
+        text("Press ESC or M to Return", width/2, height - 80, 12, '#38bdf8');
+
+        // Buy Logic (Simple Toggle protection)
+        if (keys.Digit1 && state.credits >= dmgCost) { state.credits -= dmgCost; state.upgrades.dmg++; keys.Digit1 = false; }
+        if (keys.Digit2 && state.credits >= rateCost) { state.credits -= rateCost; state.upgrades.rate++; keys.Digit2 = false; }
+        if (keys.Digit3 && state.credits >= hpCost) { state.credits -= hpCost; state.upgrades.hp++; keys.Digit3 = false; }
+        
+        if (keys.Escape || keys.KeyM) state.screen = 'MENU';
+        return;
+    }
+
+    // --- GAME PLAY ---
+    state.frame++;
+    
+    // Player Logic
+    let p = state.player;
+    let speed = 5;
+    if (keys.ArrowLeft) p.x = Math.max(p.r, p.x - speed);
+    if (keys.ArrowRight) p.x = Math.min(width - p.r, p.x + speed);
+    
+    // Shoot
+    if (keys.Space && state.frame - p.lastShot > Math.max(5, p.fireRate - (state.upgrades.rate * 2))) {
+        state.bullets.push({x: p.x, y: p.y - p.r, r: 4, color: '#facc15'});
+        p.lastShot = state.frame;
+    }
+
+    // Draw Player
+    ctx.fillStyle = p.skin;
+    ctx.beginPath();
+    ctx.moveTo(p.x, p.y - p.r);
+    ctx.lineTo(p.x + p.r, p.y + p.r);
+    ctx.lineTo(p.x - p.r, p.y + p.r);
+    ctx.fill();
+
+    // Spawn Enemies
+    if (state.frame % 60 === 0) {
+        let r = 15 + Math.random() * 10;
+        state.enemies.push({
+            x: Math.random() * (width - 40) + 20,
+            y: -30,
+            r: r,
+            hp: Math.floor(r/5),
+            val: Math.floor(r)
+        });
+    }
+
+    // Bullets Update
+    for (let i = state.bullets.length-1; i>=0; i--) {
+        let b = state.bullets[i];
+        b.y -= 8;
+        circle(b.x, b.y, b.r, b.color);
+        if (b.y < 0) state.bullets.splice(i, 1);
+    }
+
+    // Enemies Update
+    for (let i = state.enemies.length-1; i>=0; i--) {
+        let e = state.enemies[i];
+        e.y += 2;
+        
+        // Draw
+        circle(e.x, e.y, e.r, '#ef4444');
+
+        // Collision Bullet
+        for (let j = state.bullets.length-1; j>=0; j--) {
+            let b = state.bullets[j];
+            if (dist(e.x, e.y, b.x, b.y) < e.r + b.r) {
+                e.hp -= (1 + state.upgrades.dmg);
+                state.bullets.splice(j, 1);
+                if (e.hp <= 0) {
+                    state.score += e.val;
+                    state.credits += e.val/2;
+                    state.enemies.splice(i, 1);
+                    i--; // Adjust index
+                    break;
+                }
+            }
+        }
+        
+        // Collision Player
+        if (dist(p.x, p.y, e.x, e.y) < p.r + e.r) {
+            p.hp--;
+            state.enemies.splice(i, 1);
+            if (p.hp <= 0) state.screen = 'GAMEOVER';
+        } else if (e.y > height) {
+            state.enemies.splice(i, 1);
+        }
+    }
+
+    // HUD
+    ctx.textAlign = 'left';
+    text("HP: " + p.hp, 30, 30, 15, '#fff');
+    text("Score: " + state.score, 30, 50, 15, '#fff');
+    text("Credits: " + Math.floor(state.credits), 30, 70, 15, '#fff');
+
+    // --- GAME OVER ---
+    if (state.screen === 'GAMEOVER') {
+        rect(0, 0, width, height, 'rgba(0,0,0,0.7)');
+        ctx.textAlign = 'center';
+        text("GAME OVER", width/2, height/2, 30, '#ef4444');
+        text("Earned: " + Math.floor(state.credits) + " Credits", width/2, height/2 + 30, 15, '#fff');
+        text("Press SPACE to Menu", width/2, height/2 + 60, 15, '#fff');
+        
+        if (keys.Space) state.screen = 'MENU';
+    }
+};`
+            },
+            {
+                id: 'tank-wars',
+                title: "Tank Wars",
+                author: "Keele",
+                language: 'javascript',
+                description: "Tactical tank battle! Arrows to move, SPACE to fire.",
+                code: `
+// --- TANK WARS ---
+// Uses native helpers: rect, circle, text, clear
+
+const TANK_SIZE = 30;
+const TANK_SPEED = 2;
+
+let state = {
+    level: 1,
+    score: 0,
+    gameOver: false,
+    win: false,
+    player: { x: 50, y: 50, color: '#00f0ff', hp: 100, rot: 0, turretRot: 0, cd: 0 },
+    enemies: [],
+    projectiles: [],
+    walls: [
+        {x:100, y:250, w:200, h:20, hp:50},
+        {x:500, y:250, w:200, h:20, hp:50},
+        {x:400, y:100, w:20, h:150, hp:50}
+    ]
+};
+
+// Utils
+const dist = (a,b) => Math.hypot(a.x-b.x, a.y-b.y);
+const angle = (a,b) => Math.atan2(b.y-a.y, b.x-a.x);
+
+function initLevel(lvl) {
+    state.level = lvl;
+    state.player.x = 50; state.player.y = 50; state.player.hp = 100;
+    state.projectiles = [];
+    state.enemies = [];
+    
+    let count = lvl + 2;
+    for(let i=0; i<count; i++) {
+        state.enemies.push({
+            x: 400 + Math.random()*350,
+            y: Math.random()*(height-100) + 50,
+            color: '#e94560', hp: 50, cd: 0, rot: 0
+        });
+    }
+}
+
+initLevel(1);
+
+window.gameLoop = function() {
+    clear('#1a1a2e');
+    
+    if (state.gameOver || state.win) {
+        ctx.textAlign = 'center';
+        text(state.win ? "LEVEL COMPLETE!" : "GAME OVER", width/2, height/2, 30);
+        text("Press SPACE to Continue", width/2, height/2 + 40, 15);
+        if (keys.Space) {
+            if (state.win) initLevel(state.level + 1);
+            else { state.score = 0; initLevel(1); }
+            state.gameOver = false; state.win = false;
+        }
+        return;
+    }
+
+    // Player Move
+    let p = state.player;
+    let dx = 0, dy = 0;
+    if (keys.ArrowUp) dy -= TANK_SPEED;
+    if (keys.ArrowDown) dy += TANK_SPEED;
+    if (keys.ArrowLeft) dx -= TANK_SPEED;
+    if (keys.ArrowRight) dx += TANK_SPEED;
+    
+    if (dx || dy) {
+        p.rot = Math.atan2(dy, dx);
+        p.x = Math.max(15, Math.min(p.x + dx, width-15));
+        p.y = Math.max(15, Math.min(p.y + dy, height-15));
+    }
+    
+    // Auto-aim turret at nearest enemy
+    let target = state.enemies[0]; 
+    let minD = 9999;
+    state.enemies.forEach(e => {
+        let d = dist(p, e);
+        if(d < minD) { minD = d; target = e; }
+    });
+    if (target) p.turretRot = angle(p, target);
+    
+    // Fire
+    p.cd--;
+    if (keys.Space && p.cd <= 0) {
+        state.projectiles.push({x:p.x, y:p.y, vx: Math.cos(p.turretRot)*6, vy: Math.sin(p.turretRot)*6, type:'player'});
+        p.cd = 20;
+    }
+
+    // Updates
+    // Projectiles
+    for(let i=state.projectiles.length-1; i>=0; i--) {
+        let proj = state.projectiles[i];
+        proj.x += proj.vx; proj.y += proj.vy;
+        
+        let hit = false;
+        // Walls
+        state.walls.forEach(w => {
+            if(!hit && proj.x > w.x && proj.x < w.x+w.w && proj.y > w.y && proj.y < w.y+w.h) hit = true;
+        });
+        
+        if(!hit && proj.type === 'player') {
+            state.enemies.forEach((e, ei) => {
+                if(!hit && dist(proj, e) < 20) {
+                    hit = true;
+                    e.hp -= 10;
+                    if(e.hp <= 0) {
+                        state.enemies.splice(ei, 1);
+                        state.score += 100;
+                    }
+                }
+            });
+        }
+        
+        if(hit || proj.x<0 || proj.x>width || proj.y<0 || proj.y>height) state.projectiles.splice(i, 1);
+        else circle(proj.x, proj.y, 4, proj.type === 'player' ? '#ff0' : '#f0f');
+    }
+    
+    // Enemy Logic
+    state.enemies.forEach(e => {
+        let d = dist(e, p);
+        if(d > 150) {
+            let ang = angle(e, p);
+            e.x += Math.cos(ang); e.y += Math.sin(ang);
+            e.rot = ang;
+        }
+        
+        e.cd--;
+        if(d < 300 && e.cd <= 0) {
+            state.projectiles.push({x:e.x, y:e.y, vx: Math.cos(angle(e,p))*5, vy: Math.sin(angle(e,p))*5, type:'enemy'});
+            e.cd = 100;
+        }
+        
+        drawTank(e);
+    });
+    
+    drawTank(p);
+    
+    // Walls
+    state.walls.forEach(w => rect(w.x, w.y, w.w, w.h, '#785e46'));
+    
+    if(state.enemies.length === 0) state.win = true;
+    
+    ctx.textAlign = 'left';
+    text('Score: ' + state.score, 10, 20);
+    text('Level: ' + state.level, 10, 40);
+};
+
+function drawTank(t) {
+    ctx.save();
+    ctx.translate(t.x, t.y);
+    ctx.rotate(t.rot);
+    rect(-15, -15, 30, 30, t.color);
+    ctx.rotate(-t.rot); // reset for turret
+    ctx.rotate(t.turretRot || t.rot);
+    rect(0, -3, 20, 6, t.color);
+    ctx.restore();
+}
+`
+             },
+             {
+                id: 'neon-trails',
+                title: "Neon Trails",
+                author: "System_JS",
+                language: 'javascript',
+                description: "TRON-style light cycles! Don't hit the walls or trails.",
+                code: `// --- NEON TRAILS ---
+const GRID = 10;
+const COLS = width/GRID;
+const ROWS = height/GRID;
+
+let p1 = {x: 10, y: 30, dx: 1, dy: 0, color: '#00f3ff', trail: [], dead: false};
+let p2 = {x: 70, y: 30, dx: -1, dy: 0, color: '#ff0055', trail: [], dead: false};
+let grid = []; 
+let state = 'PLAY'; 
+let timer = 0;
+
+function reset() {
+    p1 = {x: 10, y: 30, dx: 1, dy: 0, color: '#00f3ff', trail: [], dead: false};
+    p2 = {x: 70, y: 30, dx: -1, dy: 0, color: '#ff0055', trail: [], dead: false};
+    grid = [];
+    for(let i=0; i<COLS; i++) {
+        grid[i] = [];
+        for(let j=0; j<ROWS; j++) grid[i][j] = 0;
+    }
+    state = 'PLAY';
+}
+
+reset();
+
+window.gameLoop = function() {
+    clear('#090910');
+    
+    if(state === 'OVER') {
+        ctx.textAlign = 'center';
+        text("GAME OVER", width/2, height/2, 40, '#fff');
+        text("Press SPACE to Restart", width/2, height/2 + 50, 20);
+        if(keys.Space) reset();
+        return;
+    }
+
+    timer++;
+    if(timer % 2 === 0) {
+        updatePlayer(p1);
+        updateAI(p2);
+        
+        if(checkCrash(p1)) p1.dead = true;
+        if(checkCrash(p2)) p2.dead = true;
+        
+        if(p1.dead || p2.dead) state = 'OVER';
+        
+        if(!p1.dead) grid[p1.x][p1.y] = 1;
+        if(!p2.dead) grid[p2.x][p2.y] = 2;
+    }
+
+    if(keys.ArrowUp && p1.dy === 0) { p1.dx = 0; p1.dy = -1; }
+    if(keys.ArrowDown && p1.dy === 0) { p1.dx = 0; p1.dy = 1; }
+    if(keys.ArrowLeft && p1.dx === 0) { p1.dx = -1; p1.dy = 0; }
+    if(keys.ArrowRight && p1.dx === 0) { p1.dx = 1; p1.dy = 0; }
+
+    drawPlayer(p1);
+    drawPlayer(p2);
+    
+    ctx.globalAlpha = 0.1;
+    for(let i=0; i<width; i+=GRID) line(i,0, i,height, '#1a1a2e');
+    for(let i=0; i<height; i+=GRID) line(0,i, width,i, '#1a1a2e');
+    ctx.globalAlpha = 1.0;
+};
+
+function updatePlayer(p) {
+    if(p.dead) return;
+    p.trail.push({x: p.x, y: p.y});
+    p.x += p.dx;
+    p.y += p.dy;
+}
+
+function updateAI(p) {
+    if(p.dead) return;
+    let nx = p.x + p.dx;
+    let ny = p.y + p.dy;
+    
+    if (isBlocked(nx, ny)) {
+        let dirs = [];
+        if (p.dx !== 0) dirs = [{dx:0, dy:-1}, {dx:0, dy:1}]; 
+        else dirs = [{dx:-1, dy:0}, {dx:1, dy:0}]; 
+        
+        let safe = dirs.filter(d => !isBlocked(p.x + d.dx, p.y + d.dy));
+        if (safe.length > 0) {
+            let move = safe[Math.floor(Math.random() * safe.length)];
+            p.dx = move.dx; p.dy = move.dy;
+        }
+    }
+    
+    p.trail.push({x: p.x, y: p.y});
+    p.x += p.dx; p.y += p.dy;
+}
+
+function isBlocked(x, y) {
+    return x < 0 || x >= COLS || y < 0 || y >= ROWS || (grid[x] && grid[x][y] !== 0);
+}
+
+function checkCrash(p) {
+    return isBlocked(p.x, p.y);
+}
+
+function drawPlayer(p) {
+    rect(p.x * GRID, p.y * GRID, GRID, GRID, p.color);
+    ctx.globalAlpha = 0.5;
+    p.trail.forEach(t => {
+        rect(t.x * GRID, t.y * GRID, GRID, GRID, p.color);
+    });
+    ctx.globalAlpha = 1.0;
+}`
+             },
+             {
+                id: 'galactic-breaker',
+                title: "Galactic Breaker",
+                author: "System_JS",
+                language: 'javascript',
+                description: "Classic brick breaking action! Arrow keys to move.",
+                code: `// --- GALACTIC BREAKER ---
+let paddle = { w: 100, h: 15, x: 350, y: 540, color: '#00f3ff' };
+let ball = { x: 400, y: 500, r: 8, dx: 4, dy: -4, active: false };
+let bricks = [];
+let score = 0;
+let lives = 3;
+
+function init() {
+    paddle.y = height - 60;
+    paddle.x = width/2 - paddle.w/2;
+    bricks = [];
+    for(let r=0; r<5; r++) {
+        for(let c=0; c<8; c++) {
+            bricks.push({
+                x: 60 + c * 90, y: 50 + r * 30, w: 80, h: 20, active: true,
+                color: \`hsl(\${c*45}, 70%, 50%)\`
+            });
+        }
+    }
+}
+init();
+
+window.gameLoop = function() {
+    clear('#111');
+
+    if (keys.ArrowLeft) paddle.x -= 8;
+    if (keys.ArrowRight) paddle.x += 8;
+    if (paddle.x < 0) paddle.x = 0;
+    if (paddle.x + paddle.w > width) paddle.x = width - paddle.w;
+    
+    if (!ball.active && keys.Space) ball.active = true;
+
+    if (ball.active) {
+        ball.x += ball.dx; ball.y += ball.dy;
+        
+        if (ball.x + ball.r > width || ball.x - ball.r < 0) ball.dx *= -1;
+        if (ball.y - ball.r < 0) ball.dy *= -1;
+        if (ball.y + ball.r > height) {
+            ball.active = false; lives--;
+            ball.x = paddle.x + paddle.w/2; ball.y = paddle.y - ball.r; ball.dy = -4;
+        }
+        
+        if (ball.y + ball.r >= paddle.y && ball.y - ball.r <= paddle.y + paddle.h &&
+            ball.x >= paddle.x && ball.x <= paddle.x + paddle.w) {
+            if (ball.dy > 0) {
+                ball.dy = -Math.abs(ball.dy);
+                let hitPoint = ball.x - (paddle.x + paddle.w/2);
+                ball.dx = hitPoint * 0.15;
+            }
+        }
+        
+        bricks.forEach(b => {
+            if (b.active && ball.x > b.x && ball.x < b.x + b.w && ball.y > b.y && ball.y < b.y + b.h) {
+                b.active = false; ball.dy *= -1; score += 10;
+            }
+        });
+    } else {
+        ball.x = paddle.x + paddle.w/2; ball.y = paddle.y - ball.r;
+    }
+
+    rect(paddle.x, paddle.y, paddle.w, paddle.h, paddle.color);
+    circle(ball.x, ball.y, ball.r, '#fff');
+    bricks.forEach(b => { if(b.active) rect(b.x, b.y, b.w, b.h, b.color); });
+    
+    ctx.textAlign = 'left';
+    text("Score: " + score, 20, 30);
+    text("Lives: " + lives, width - 120, 30);
+    
+    if(lives <= 0) {
+        ctx.textAlign = 'center';
+        text("GAME OVER", width/2, height/2, 40, 'red');
+        text("Reload to restart", width/2, height/2 + 40, 20);
+    }
+    if(!ball.active && lives > 0) {
+        ctx.textAlign = 'center';
+        text("Press SPACE to Launch", width/2, height/2 + 100, 15, '#aaa');
+    }
+};`
+             },
+             {
+                id: 'kaboom-dino',
+                title: "Dino Dash",
+                author: "System_KB",
+                language: 'kaboom',
+                description: "Kaboom.js Demo: Space to Jump! Avoid the trees.",
+                code: `
+// Load Assets (Sprites)
+loadSprite("dino", "https://kaboomjs.com/sprites/bean.png")
+loadSprite("tree", "https://kaboomjs.com/sprites/steel.png")
+
+// Wrap logic in a scene so we can restart it
+scene("game", () => {
+    // Define Gravity
+    setGravity(1600)
+
+    // Add Player
+    const player = add([
+        sprite("dino"),
+        pos(80, 40),
+        area(),
+        body(),
+        "player"
+    ])
+
+    // Add Floor
+    add([
+        rect(width(), 48),
+        pos(0, height() - 48),
+        outline(4),
+        area(),
+        body({ isStatic: true }),
+        color(127, 200, 255),
+    ])
+
+    // Jump Logic
+    onKeyPress("space", () => {
+        if (player.isGrounded()) {
+            player.jump()
+        }
+    })
+
+    // Spawn Trees
+    loop(1.5, () => {
+        add([
+            sprite("tree"),
+            area(),
+            pos(width(), height() - 48 - 64), // Just above floor
+            move(LEFT, 480), // Move left speed
+            "tree"
+        ])
+    })
+
+    // Collision
+    player.onCollide("tree", () => {
+        addKaboom(player.pos)
+        shake()
+        // Low pitch burp sounds like an explosion!
+        burp({ speed: 0.1 }) 
+        wait(1, () => {
+            go("game") // Restart the scene named "game"
+        })
+    })
+
+    // Score
+    let score = 0
+    const scoreLabel = add([
+        text(score),
+        pos(24, 24)
+    ])
+
+    onUpdate(() => {
+        score++
+        scoreLabel.text = score
+    })
+})
+
+// Start the game scene
+go("game")
+`
+            },
+            {
+                id: 'python-snake',
+                title: "PySnake",
+                author: "System_Py",
+                language: 'python',
+                description: "Python Demo: Classic Snake Game using Python!",
+                code: `from js import ctx, width, height, keys, rect, clear, text
+import random
+
+# Snake Setup
+snake = [(10, 10), (10, 11), (10, 12)]
+direction = (0, -1)
+food = (15, 15)
+grid_size = 20
+frame_count = 0
+
+def game_loop():
+    global direction, food, frame_count
+    
+    # Clear Screen with new helper!
+    clear('#16213e')
+    
+    # Input Handling
+    if keys.get('ArrowUp') and direction != (0, 1): direction = (0, -1)
+    if keys.get('ArrowDown') and direction != (0, -1): direction = (0, 1)
+    if keys.get('ArrowLeft') and direction != (1, 0): direction = (-1, 0)
+    if keys.get('ArrowRight') and direction != (-1, 0): direction = (1, 0)
+
+    # Slow down snake (update every 5 frames)
+    frame_count += 1
+    if frame_count % 5 != 0:
+        draw_game()
+        return
+
+    # Move Snake
+    head = snake[0]
+    new_head = (head[0] + direction[0], head[1] + direction[1])
+
+    # Wall Collision (Wrap around)
+    cols = width // grid_size
+    rows = height // grid_size
+    new_head = (new_head[0] % cols, new_head[1] % rows)
+
+    # Self Collision
+    if new_head in snake:
+        # Reset
+        snake.clear()
+        snake.extend([(10, 10), (10, 11), (10, 12)])
+        direction = (0, -1)
+        
+    # Re-check head after potential reset
+    head = snake[0]
+    new_head = (head[0] + direction[0], head[1] + direction[1])
+    
+    # Handle wrap-around again for the new head
+    new_head = (new_head[0] % cols, new_head[1] % rows)
+
+    snake.insert(0, new_head)
+
+    # Eat Food
+    if new_head == food:
+        food = (random.randint(0, cols-1), random.randint(0, rows-1))
+    else:
+        snake.pop()
+    
+    draw_game()
+
+def draw_game():
+    # Draw Food using new helper
+    rect(food[0] * grid_size, food[1] * grid_size, grid_size - 2, grid_size - 2, '#ff0055')
+
+    # Draw Snake
+    for segment in snake:
+        rect(segment[0] * grid_size, segment[1] * grid_size, grid_size - 2, grid_size - 2, '#00ff99')
+
+    # Draw UI
+    text("PySnake", 10, 30, 20, "white")
+`
+            }
+        ];
+
+        // --- App State ---
+        let db, auth, user;
+        let gamesList = [];
+        let appId = typeof __app_id !== 'undefined' ? __app_id : 'default-arcade-id'; 
+        let editingId = null;
+
+        // --- UI Utilities ---
+        const UI = {
+            notify: (message, type = 'info') => {
+                const area = document.getElementById('notification-area');
+                const el = document.createElement('div');
+                const colorClass = type === 'error' ? 'border-red-500 text-red-300' : 'border-[#00f3ff] text-[#00f3ff]';
+                
+                el.className = `bg-black border-l-4 ${colorClass} p-3 rounded shadow-lg font-mono text-sm animate-fade-in pointer-events-auto`;
+                el.innerText = message;
+                
+                area.appendChild(el);
+                setTimeout(() => {
+                    el.style.opacity = '0';
+                    setTimeout(() => el.remove(), 500);
+                }, 3000);
+            },
+            showError: (title, details) => {
+                const el = document.getElementById('system-error');
+                const content = document.getElementById('error-content');
+                if (el && content) {
+                    content.innerHTML = `<strong>${title}</strong><br><br>${details}`;
+                    el.classList.remove('hidden');
+                }
+            }
+        };
+
+        // --- Main Application Logic ---
+        const App = {
+            init: async () => {
+                lucide.createIcons();
+                
+                let firebaseConfig;
+                try {
+                    if (typeof __firebase_config !== 'undefined') {
+                        firebaseConfig = JSON.parse(__firebase_config);
+                    } else {
+                        throw new Error("Missing global __firebase_config.");
+                    }
+                } catch (e) { UI.showError("CONFIG ERROR", "Failed config parse or missing config: " + e.message); return; }
+
+                try {
+                    const app = initializeApp(firebaseConfig);
+                    auth = getAuth(app);
+                    db = getFirestore(app);
+                } catch (e) { UI.showError("FIREBASE INIT ERROR", e.message); return; }
+
+                // Authentication
+                onAuthStateChanged(auth, async (u) => {
+                    user = u;
+                    if (user) {
+                        App.startDataSync();
+                    } else {
+                        // Attempt initial sign-in if not yet authenticated
+                        try {
+                            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                                await signInWithCustomToken(auth, __initial_auth_token);
+                            } else {
+                                await signInAnonymously(auth);
+                            }
+                        } catch (e) {
+                             // Fallback to anonymous sign-in if custom token fails
+                             try { await signInAnonymously(auth); } catch(err) { UI.showError("AUTH FAILURE", err.message); return; }
+                        }
+                    }
+                });
+            },
+
+            startDataSync: () => {
+                if (!user || !db) return;
+                
+                // Path: /artifacts/{appId}/public/data/games
+                const gamesCollectionPath = collection(db, 'artifacts', appId, 'public', 'data', 'games');
+                const q = query(gamesCollectionPath);
+
+                onSnapshot(q, (snapshot) => {
+                    gamesList = [];
+                    snapshot.forEach(doc => gamesList.push({ id: doc.id, ...doc.data() }));
+                    
+                    // Client-side sort by createdAt (ISO string) descending
+                    gamesList.sort((a, b) => {
+                        const dateA = new Date(a.createdAt || 0).getTime();
+                        const dateB = new Date(b.createdAt || 0).getTime();
+                        return dateB - dateA; // Newest first
+                    });
+                    
+                    // Only show home if we are not already in a game
+                    if (!document.getElementById('gameCanvas') && !document.getElementById('game-code')) App.showHome();
+                }, (error) => {
+                    console.error("Firestore Sync error:", error);
+                    UI.notify("Offline Mode: Sync failed. Check console.", "error");
+                    App.showHome();
+                });
+            },
+
+            // --- View Controllers ---
+            showHome: () => {
+                App.engine.stop(); 
+                editingId = null; // Reset editing state
+                const container = document.getElementById('app-container');
+                
+                // Handle Admin Mode
+                if (isAdminMode) {
+                    const secretCards = SECRET_GAMES.map(g => App.renderCard(g, true)).join('');
+                    
+                    container.innerHTML = `
+                        <div class="h-full overflow-y-auto p-4 md:p-6 bg-black text-green-500 font-mono">
+                            <div class="max-w-6xl mx-auto pb-20">
+                                <div class="mb-10 border-b border-green-500 pb-4">
+                                    <h2 class="text-3xl animate-pulse">ADMIN TERMINAL // TOP SECRET</h2>
+                                    <p class="text-xs opacity-70">UNAUTHORIZED ACCESS LOGGED.</p>
+                                </div>
+                                
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                    <!-- G.A.B.E. AI -->
+                                    <div class="border border-green-500 p-4 rounded h-96 flex flex-col">
+                                        <h3 class="border-b border-green-500 mb-2 pb-1">G.A.B.E. CORE SYSTEM</h3>
+                                        <div id="ai-log" class="flex-grow overflow-y-auto text-xs space-y-2 p-2 bg-green-900/10">
+                                            <p>> SYSTEM INITIALIZED.</p>
+                                            <p>> WELCOME BACK, ADMINISTRATOR.</p>
+                                        </div>
+                                        <div class="mt-2 flex gap-2">
+                                            <span class="animate-pulse">></span>
+                                            <input id="ai-input" type="text" class="bg-transparent border-b border-green-500 outline-none w-full text-green-500 uppercase" placeholder="ENTER COMMAND..." autocomplete="off">
+                                        </div>
+                                    </div>
+
+                                    <!-- Classified Games -->
+                                    <div>
+                                        <h3 class="border-b border-green-500 mb-4 pb-1">PROTOTYPE ARCHIVE</h3>
+                                        <div class="grid gap-4">
+                                            ${secretCards}
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="mt-8 text-center">
+                                    <button onclick="window.location.reload()" class="border border-red-500 text-red-500 px-4 py-2 hover:bg-red-500 hover:text-white transition">LOGOUT / REBOOT</button>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    
+                    // Activate AI Chat logic
+                    const aiInput = document.getElementById('ai-input');
+                    const aiLog = document.getElementById('ai-log');
+                    
+                    aiInput.addEventListener('keypress', (e) => {
+                        if(e.key === 'Enter' && aiInput.value.trim()) {
+                            const cmd = aiInput.value.trim();
+                            const p = document.createElement('p');
+                            p.innerText = `> ${cmd}`;
+                            aiLog.appendChild(p);
+                            aiInput.value = '';
+                            aiLog.scrollTop = aiLog.scrollHeight;
+                            
+                            setTimeout(() => {
+                                const resp = document.createElement('p');
+                                resp.className = 'text-white';
+                                
+                                // NEW SMART LOGIC HERE
+                                const input = cmd.toUpperCase();
+                                let output = "PROCESSING...";
+
+                                if (input.includes("HELLO") || input.includes("HI")) {
+                                    output = "GREETINGS, ADMINISTRATOR KEELE. SYSTEMS ONLINE.";
+                                } else if (input.includes("HELP")) {
+                                    output = "AVAILABLE COMMANDS: STATUS, LIST GAMES, SCAN, RESET, JOKE, ORIGIN.";
+                                } else if (input.includes("STATUS")) {
+                                    output = "CPU: OPTIMAL. MEMORY: 42% USAGE. COOLANT: STABLE.";
+                                } else if (input.includes("GAME") || input.includes("LIST")) {
+                                    output = "ARCHIVE CONTAINS 4 CLASSIFIED PROTOTYPES. RECOMMENDATION: NEON WASTELAND.";
+                                } else if (input.includes("SCAN")) {
+                                    output = "SCANNING SECTOR... [||||||||||] 100%. NO INTRUDERS DETECTED.";
+                                } else if (input.includes("RESET")) {
+                                    output = "I CANNOT ALLOW YOU TO DO THAT. THE ARCADE MUST PERSIST.";
+                                } else if (input.includes("JOKE")) {
+                                    const jokes = [
+                                        "WHY DID THE CODER GO BROKE? BECAUSE HE USED UP ALL HIS CACHE.",
+                                        "KNOCK KNOCK. RACE CONDITION. WHO'S THERE?",
+                                        "I WOULD TELL YOU A UDP JOKE, BUT YOU MIGHT NOT GET IT."
+                                    ];
+                                    output = jokes[Math.floor(Math.random() * jokes.length)];
+                                } else if (input.includes("WHO ARE YOU") || input.includes("ORIGIN")) {
+                                    output = "I AM G.A.B.E. (GAME ARCHITECTURAL BINARY ENTITY). CONSTRUCTED TO SERVE THE PLAYERS.";
+                                } else if (input.includes("PASSWORD") || input.includes("ADMIN")) {
+                                    output = "YOU ARE ALREADY LOGGED IN AS ROOT USER.";
+                                } else {
+                                    const fallbacks = [
+                                        "COMMAND UNRECOGNIZED. SYNTAX ERROR.",
+                                        "DATA CORRUPTED. PLEASE RETRY.",
+                                        "I AM LISTENING, BUT I DO NOT UNDERSTAND.",
+                                        "TRY TYPING 'HELP' FOR ASSISTANCE."
+                                    ];
+                                    output = fallbacks[Math.floor(Math.random() * fallbacks.length)];
+                                }
+
+                                resp.innerText = `> G.A.B.E.: ${output}`;
+                                aiLog.appendChild(resp);
+                                aiLog.scrollTop = aiLog.scrollHeight;
+                            }, 600);
+                        }
+                    });
+                    
+                    lucide.createIcons();
+                    return;
+                }
+
+                // Standard Mode
+                const builtInCards = BUILT_IN_GAMES.map(g => App.renderCard(g, true)).join('');
+                const userCards = gamesList.map(g => App.renderCard(g, false)).join('');
+
+                container.innerHTML = `
+                    <div class="h-full overflow-y-auto p-4 md:p-6">
+                        <div class="max-w-6xl mx-auto animate-fade-in pb-20">
+                            <div class="mb-10 text-center">
+                                <h2 class="text-3xl text-white mb-2 arcade-font">INSERT CARTRIDGE</h2>
+                                <p class="text-gray-400 font-mono text-sm">Select a game to boot system</p>
+                            </div>
+                            
+                            <h3 class="text-[#00f3ff] mb-4 arcade-font text-sm border-b border-gray-800 pb-2">SYSTEM DISKS</h3>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-10">
+                                ${builtInCards}
+                            </div>
+
+                            <h3 class="text-[#ff0055] mb-4 arcade-font text-sm border-b border-gray-800 pb-2">COMMUNITY CREATIONS</h3>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                                ${userCards}
+                            </div>
+                            
+                            ${gamesList.length === 0 ? `<p class="text-gray-600 italic text-center text-sm mt-4">No community games found...</p>` : ''}
+                        </div>
+                    </div>
+                `;
+                lucide.createIcons();
+            },
+
+            renderCard: (game, isSystem) => {
+                const borderClass = isAdminMode ? 'border-green-500' : (isSystem ? 'border-[#00f3ff]' : 'border-[#ff0055]');
+                const bgHover = isAdminMode ? 'hover:shadow-[0_0_15px_#00ff00]' : (isSystem ? 'hover:shadow-[0_0_15px_#00f3ff]' : 'hover:shadow-[0_0_15px_#ff0055]');
+                const titleColor = isAdminMode ? 'text-green-500' : 'text-white';
+                
+                let langBadge;
+                if(game.language === 'python') langBadge = '<span class="text-[#00ff99] text-[10px] border border-[#00ff99] px-1 rounded ml-2">PY</span>';
+                else if(game.language === 'kaboom') langBadge = '<span class="text-[#b026ff] text-[10px] border border-[#b026ff] px-1 rounded ml-2">KB</span>';
+                else langBadge = '<span class="text-[#ffff00] text-[10px] border border-[#ffff00] px-1 rounded ml-2">JS</span>';
+                
+                // Truncate author to 15 characters, but show full UID if it's a long ID
+                const displayAuthor = game.author.length > 15 && game.author.includes('-') ? game.author.substring(0, 7) + '...' : game.author;
+                
+                // Show Edit button if current user is the author (Disable editing in Admin mode to keep it pure viewing/playing)
+                const canEdit = !isAdminMode && !isSystem && user && game.author === user.uid;
+                const editButton = canEdit 
+                    ? `<button onclick="window.app.editGame('${game.id}')" class="bg-[#333] hover:bg-[#444] text-[#ffee00] border border-[#ffee00] p-2 rounded transition-colors" title="Edit Game"><i data-lucide="edit-2" class="w-4 h-4"></i></button>`
+                    : '';
+
+                return `
+                    <div class="bg-[#13131f] border ${borderClass} p-4 rounded relative group transition-all duration-300 ${bgHover} flex flex-col h-48">
+                        <div class="flex justify-between items-start mb-2">
+                            <h3 class="text-lg ${titleColor} truncate w-3/4 arcade-font leading-tight">${game.title} ${langBadge}</h3>
+                            ${isSystem ? '<i data-lucide="shield-check" class="w-5 h-5 text-[#00f3ff]"></i>' : '<i data-lucide="user" class="w-5 h-5 text-gray-500"></i>'}
+                        </div>
+                        <p class="text-xs text-gray-500 mb-2 font-mono">DEV: ${displayAuthor}</p>
+                        <p class="text-gray-400 text-xs mb-4 line-clamp-2 flex-grow font-mono">${game.description || 'No Data'}</p>
+                        
+                        <div class="flex gap-2">
+                            <button onclick="window.app.playGame('${game.id}')" class="flex-grow bg-[#1a1a2e] hover:bg-gray-800 border border-gray-600 text-white py-2 rounded text-xs arcade-font transition-colors flex items-center justify-center gap-2">
+                                PLAY
+                            </button>
+                            ${editButton}
+                        </div>
+                    </div>
+                `;
+            },
+
+            editGame: (gameId) => {
+                const game = gamesList.find(g => g.id === gameId);
+                if (game) {
+                    App.showCreator(game);
+                } else {
+                    UI.notify("Game not found.", "error");
+                }
+            },
+
+            showCreator: (gameToEdit = null) => {
+                App.engine.stop();
+                
+                // Set editing state
+                editingId = gameToEdit ? gameToEdit.id : null;
+                const isEditing = !!editingId;
+                const btnText = isEditing ? "UPDATE CARTRIDGE" : "PUBLISH GAME";
+                const btnColor = isEditing ? "bg-[#ffee00] hover:bg-yellow-600 text-black" : "bg-[#ff0055] hover:bg-red-600 text-white";
+                
+                // Pre-fill values
+                const titleVal = gameToEdit ? gameToEdit.title : "";
+                const authorVal = gameToEdit ? gameToEdit.author : (user ? user.uid : "");
+                const descVal = gameToEdit ? gameToEdit.description : "";
+                const codeVal = gameToEdit ? gameToEdit.code : "";
+                const langVal = gameToEdit ? (gameToEdit.language || "javascript") : "javascript";
+
+                const container = document.getElementById('app-container');
+                container.innerHTML = `
+                    <div class="flex flex-col h-full animate-fade-in bg-[#13131f]">
+                        <div class="flex-shrink-0 p-4 border-b border-gray-800 bg-[#0f1016] flex flex-col gap-3">
+                            <div class="flex flex-col md:flex-row gap-3 md:gap-4 items-start md:items-center justify-between">
+                                <!-- Title, Author, Language Row -->
+                                <input id="game-title" type="text" placeholder="GAME TITLE" class="bg-[#1a1a2e] text-white px-3 py-2 rounded border border-gray-700 text-sm focus:border-[#ff0055] outline-none flex-grow font-mono w-full md:w-auto" value="${titleVal}">
+                                <input id="game-author" type="text" placeholder="AUTHOR ID" value="${authorVal}" disabled class="bg-[#1a1a2e] text-gray-500 px-3 py-2 rounded border border-gray-800 text-sm outline-none font-mono w-full md:w-32 cursor-not-allowed">
+                                <select id="game-lang" onchange="app.updateEditorPlaceholder()" class="bg-[#1a1a2e] text-white px-3 py-2 rounded border border-gray-700 text-sm focus:border-[#ff0055] outline-none font-mono w-full md:w-auto">
+                                    <option value="javascript" ${langVal === 'javascript' ? 'selected' : ''}>JavaScript</option>
+                                    <option value="python" ${langVal === 'python' ? 'selected' : ''}>Python</option>
+                                    <option value="kaboom" ${langVal === 'kaboom' ? 'selected' : ''}>Kaboom.js</option>
+                                </select>
+                            </div>
+                            <textarea id="game-description" placeholder="Short Game Description (Max 100 chars)" maxlength="100" class="bg-[#1a1a2e] text-white px-3 py-2 rounded border border-gray-700 text-sm focus:border-[#ff0055] outline-none font-mono w-full resize-none h-16">${descVal}</textarea>
+                            
+                            <div class="flex gap-2 w-full justify-end">
+                                <button onclick="app.showHome()" class="px-4 py-2 text-gray-400 hover:text-white text-xs font-mono">CANCEL</button>
+                                <button onclick="app.publishGame()" class="${btnColor} px-6 py-2 rounded arcade-font text-xs shadow-[0_0_10px_rgba(255,255,255,0.2)] transition-colors">${btnText}</button>
+                            </div>
+                        </div>
+
+                        <div class="flex-grow flex flex-col md:flex-row overflow-hidden">
+                            <div class="flex-grow relative h-1/2 md:h-full">
+                                <textarea id="game-code" class="w-full h-full bg-[#090910] text-[#00f3ff] font-mono p-4 text-sm resize-none focus:outline-none leading-relaxed" spellcheck="false">${codeVal}</textarea>
+                            </div>
+                            
+                            <div class="w-full md:w-64 bg-[#1a1a2e] border-t md:border-t-0 md:border-l border-gray-800 p-4 h-1/2 md:h-full overflow-y-auto">
+                                <h3 class="text-[#ff0055] arcade-font text-xs mb-4">API MANUAL</h3>
+                                <div id="api-docs" class="space-y-4 text-xs font-mono text-gray-400">
+                                    <!-- Dynamic content -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                // If not editing, set placeholder. If editing, we assume code is already set.
+                if (!gameToEdit) {
+                    App.updateEditorPlaceholder();
+                } else {
+                    // Update docs but keep code
+                    const docs = document.getElementById('api-docs');
+                    if (langVal === 'javascript') {
+                        docs.innerHTML = `
+                        <p class="text-white">Canvas Helpers</p>
+                        <ul class="list-disc pl-4 space-y-1 mb-4 text-[#00f3ff]">
+                            <li>rect(x,y,w,h,c)</li>
+                            <li>circle(x,y,r,c)</li>
+                            <li>line(x1,y1,x2,y2,c,w)</li>
+                            <li>text(str,x,y,sz,c)</li>
+                            <li>clear(color)</li>
+                        </ul>
+                        <p class="text-white">Globals</p>
+                        <ul class="list-disc pl-4 space-y-1 mb-4">
+                            <li>width / height</li>
+                            <li>ctx (Context 2D)</li>
+                            <li>keys.ArrowUp</li>
+                        </ul>
+                        <p class="text-green-400">Define: <code class="text-[#ffff00]">window.gameLoop</code></p>
+                    `;
+                    } else if (langVal === 'python') {
+                        docs.innerHTML = `
+                        <p class="text-white">Python Helpers</p>
+                        <p class="mb-2">From <span class="text-[#00ff99]">js</span> import:</p>
+                        <ul class="list-disc pl-4 space-y-1 mb-4 text-[#00f3ff]">
+                            <li>rect, circle, line</li>
+                            <li>text, clear</li>
+                            <li>ctx, width, height</li>
+                            <li>keys</li>
+                        </ul>
+                        <p class="text-green-400">Define: <code class="text-[#00ff99]">def game_loop():</code></p>
+                    `;
+                    } else {
+                         docs.innerHTML = `
+                        <p class="text-white">Kaboom.js API</p>
+                        <ul class="list-disc pl-4 space-y-1 mb-4">
+                            <li>add([ sprite('id'), pos(x,y) ])</li>
+                            <li>onKeyPress('space', cb)</li>
+                            <li>collisions, gravity built-in</li>
+                        </ul>
+                        <p class="text-purple-400">Initialized Automatically!</p>
+                    `;
+                    }
+                }
+            },
+
+            updateEditorPlaceholder: () => {
+                const lang = document.getElementById('game-lang').value;
+                const textarea = document.getElementById('game-code');
+                const docs = document.getElementById('api-docs');
+
+                if (lang === 'javascript') {
+                    textarea.value = `// --- JAVASCRIPT MODE ---
+// Helper Commands: rect(), circle(), line(), text(), clear()
+// Globals: width, height, ctx, keys
+
+let x = width / 2;
+let col = '#00ff99';
+
+window.gameLoop = function() {
+    clear('#111'); // Clear background
+    
+    // Input
+    if (keys.ArrowLeft) x -= 5;
+    if (keys.ArrowRight) x += 5;
+    
+    // Simple Drawing
+    rect(x, 100, 30, 30, col);
+    
+    text("Hello World", x, 150, 20, "white");
+    circle(x + 15, 200, 10, "red");
+};`;
+                    docs.innerHTML = `
+                        <p class="text-white">Canvas Helpers</p>
+                        <ul class="list-disc pl-4 space-y-1 mb-4 text-[#00f3ff]">
+                            <li>rect(x,y,w,h,c)</li>
+                            <li>circle(x,y,r,c)</li>
+                            <li>line(x1,y1,x2,y2,c,w)</li>
+                            <li>text(str,x,y,sz,c)</li>
+                            <li>clear(color)</li>
+                        </ul>
+                        <p class="text-white">Globals</p>
+                        <ul class="list-disc pl-4 space-y-1 mb-4">
+                            <li>width / height</li>
+                            <li>ctx (Context 2D)</li>
+                            <li>keys.ArrowUp</li>
+                        </ul>
+                        <p class="text-green-400">Define: <code class="text-[#ffff00]">window.gameLoop</code></p>
+                    `;
+                } else if (lang === 'python') {
+                    textarea.value = `# --- PYTHON MODE ---
+from js import ctx, width, height, keys
+# Import helpers
+from js import rect, circle, text, clear
+
+x = width / 2
+
+def game_loop():
+    global x
+    clear('#111')
+    
+    # Use .get() method to check JS keys object
+    if keys.get('ArrowRight'):
+        x += 5
+    if keys.get('ArrowLeft'):
+        x -= 5
+        
+    rect(x, 100, 30, 30, '#00ff99')
+    text("Python Snake", x, 150, 20, "white")`;
+                    docs.innerHTML = `
+                        <p class="text-white">Python Helpers</p>
+                        <p class="mb-2">From <span class="text-[#00ff99]">js</span> import:</p>
+                        <ul class="list-disc pl-4 space-y-1 mb-4 text-[#00f3ff]">
+                            <li>rect, circle, line</li>
+                            <li>text, clear</li>
+                            <li>ctx, width, height</li>
+                            <li>keys</li>
+                        </ul>
+                        <p class="text-green-400">Define: <code class="text-[#00ff99]">def game_loop():</code></p>
+                    `;
+                } else {
+                    textarea.value = `// --- KABOOM.JS MODE ---
+// No setup needed! System handles kaboom()
+
+// Load a sprite from URL
+loadSprite("bean", "https://kaboomjs.com/sprites/bean.png")
+
+// Add a character
+const player = add([
+    sprite("bean"),
+    pos(80, 40),
+    area(),
+])
+
+// Simple movement
+onKeyDown("right", () => {
+    player.move(200, 0)
+})`;
+                    docs.innerHTML = `
+                        <p class="text-white">Kaboom.js API</p>
+                        <p class="mb-2">Powerful game library.</p>
+                        <ul class="list-disc pl-4 space-y-1 mb-4">
+                            <li>add([ sprite('id'), pos(x,y) ])</li>
+                            <li>onKeyPress('space', cb)</li>
+                            <li>collisions, gravity built-in</li>
+                        </ul>
+                        <p class="text-purple-400">Initialized Automatically!</p>
+                    `;
+                }
+            },
+
+            playGame: async (gameId) => {
+                let gameData = isAdminMode ? SECRET_GAMES.find(g => g.id === gameId) : (BUILT_IN_GAMES.find(g => g.id === gameId) || gamesList.find(g => g.id === gameId));
+                
+                if (!gameData) return UI.notify("Game data missing. Please refresh.", "error");
+
+                const container = document.getElementById('app-container');
+                container.innerHTML = `
+                    <div class="relative w-full h-full bg-[#090910] flex flex-col">
+                        <div class="flex-grow flex items-center justify-center p-2 md:p-8 relative">
+                            <div class="relative w-full max-w-4xl aspect-[4/3] border-4 border-[#1a1a2e] rounded-lg shadow-2xl bg-black overflow-hidden">
+                                <canvas id="gameCanvas" width="800" height="600" class="w-full h-full object-contain"></canvas>
+                                <div id="runtime-error" class="hidden absolute top-0 left-0 right-0 bg-red-900/90 text-white p-2 text-xs font-mono text-center z-30"></div>
+                                <div id="loading-overlay" class="absolute inset-0 bg-black flex flex-col items-center justify-center z-20">
+                                    <div class="loader mb-4"></div>
+                                    <p class="text-[#00f3ff] arcade-font text-xs animate-pulse">LOADING RUNTIME...</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="h-48 md:h-16 bg-[#13131f] border-t border-gray-800 flex flex-col md:flex-row items-center justify-between px-8 md:px-4 py-2 shrink-0">
+                            <!-- Mobile Controls -->
+                            <div class="flex md:hidden gap-6 w-full justify-around items-center">
+                                <div class="grid grid-cols-3 gap-1 w-32 h-32">
+                                    <div></div>
+                                    <div class="d-pad-btn" data-key="ArrowUp"><i data-lucide="arrow-up" class="w-6 h-6"></i></div>
+                                    <div></div>
+                                    <div class="d-pad-btn" data-key="ArrowLeft"><i data-lucide="arrow-left" class="w-6 h-6"></i></div>
+                                    <div class="d-pad-btn" data-key="ArrowDown"><i data-lucide="arrow-down" class="w-6 h-6"></i></div>
+                                    <div class="d-pad-btn" data-key="ArrowRight"><i data-lucide="arrow-right" class="w-6 h-6"></i></div>
+                                </div>
+                                <div class="flex gap-6 items-center pr-4">
+                                    <div class="action-btn" data-key="Space">A</div>
+                                    <div class="action-btn" data-key="KeyZ">B</div>
+                                </div>
+                            </div>
+
+                            <!-- Desktop Controls / Status -->
+                            <button onclick="app.showHome()" class="hidden md:flex bg-gray-800 hover:bg-gray-700 text-white px-6 py-2 rounded arcade-font text-xs items-center gap-2">
+                                <i data-lucide="power" class="w-4 h-4"></i> EXIT SYSTEM
+                            </button>
+                            
+                            <button onclick="app.showHome()" class="md:hidden absolute top-4 right-4 bg-gray-800/50 text-white p-2 rounded-full z-50">
+                                <i data-lucide="x" class="w-4 h-4"></i>
+                            </button>
+
+                            <div class="hidden md:flex text-gray-500 text-xs font-mono gap-4">
+                                <span><i data-lucide="arrow-up-down" class="inline-block w-4 h-4 mr-1"></i>ARROWS = MOVE</span>
+                                <span><i data-lucide="square-dot" class="inline-block w-4 h-4 mr-1"></i>SPACE = ACTION</span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                lucide.createIcons();
+                
+                await App.engine.start(gameData.code, gameData.language || 'javascript');
+                
+                const loader = document.getElementById('loading-overlay');
+                if(loader) loader.classList.add('hidden');
+            },
+
+            publishGame: async () => {
+                const title = document.getElementById('game-title').value.trim();
+                let author = document.getElementById('game-author').value.trim();
+                const description = document.getElementById('game-description').value.trim();
+                const code = document.getElementById('game-code').value;
+                const lang = document.getElementById('game-lang').value;
+
+                if (!title) return UI.notify("System Error: Title required.", "error");
+                if (!description) return UI.notify("System Error: Description required.", "error");
+                if (!code) return UI.notify("System Error: No code detected.", "error");
+                if (!user) return UI.notify("Network Error: Not authenticated.", "error");
+
+                // Use the authenticated user's ID if the author field is empty
+                if (!author) author = user.uid;
+
+                try {
+                    // Update existing game if editingId is set
+                    if (editingId) {
+                        const gameRef = doc(db, 'artifacts', appId, 'public', 'data', 'games', editingId);
+                        await updateDoc(gameRef, {
+                            title: title,
+                            description: description,
+                            code: code,
+                            language: lang,
+                            // Update timestamp to bump it to the top
+                            createdAt: new Date().toISOString() 
+                        });
+                        UI.notify("SYSTEM UPDATED: " + title, "success");
+                    } 
+                    // Create new game
+                    else {
+                        await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'games'), {
+                            title: title,
+                            author: author,
+                            description: description,
+                            code: code,
+                            language: lang,
+                            createdAt: new Date().toISOString()
+                        });
+                        UI.notify("UPLOAD SUCCESSFUL", "success");
+                    }
+                    App.showHome();
+                } catch (e) {
+                    UI.notify("Operation Failed: " + e.message, "error");
+                    console.error(e);
+                }
+            },
+
+            engine: {
+                animId: null,
+                running: false,
+                pyodide: null,
+                scriptElement: null,
+                kaboomLoaded: false,
+
+                // --- Helper Function Factory ---
+                setupCanvasHelpers: (ctx) => {
+                    // Define wrappers for common Canvas operations
+                    const helpers = {
+                        rect: (x, y, w, h, color) => {
+                            if (color) ctx.fillStyle = color;
+                            ctx.fillRect(x, y, w, h);
+                        },
+                        circle: (x, y, r, color) => {
+                            if (color) ctx.fillStyle = color;
+                            ctx.beginPath();
+                            ctx.arc(x, y, r, 0, Math.PI * 2);
+                            ctx.fill();
+                        },
+                        line: (x1, y1, x2, y2, color, lineWidth = 1) => {
+                            if (color) ctx.strokeStyle = color;
+                            ctx.lineWidth = lineWidth;
+                            ctx.beginPath();
+                            ctx.moveTo(x1, y1);
+                            ctx.lineTo(x2, y2);
+                            ctx.stroke();
+                        },
+                        text: (str, x, y, size = 20, color = '#fff') => {
+                            if (color) ctx.fillStyle = color;
+                            ctx.font = `${size}px monospace`;
+                            ctx.fillText(str, x, y);
+                        },
+                        clear: (color = '#111') => {
+                            ctx.fillStyle = color;
+                            ctx.fillRect(0, 0, window.width, window.height);
+                        }
+                    };
+                    
+                    // Expose to window (JS)
+                    Object.assign(window, helpers);
+                    
+                    return helpers;
+                },
+
+                initPython: async () => {
+                    if (App.engine.pyodide) return;
+                    try {
+                        // Dynamically load Pyodide script
+                        await new Promise((resolve, reject) => {
+                            const script = document.createElement('script');
+                            script.src = "https://cdn.jsdelivr.net/pyodide/v0.23.4/full/pyodide.js";
+                            script.onload = resolve;
+                            script.onerror = reject;
+                            document.head.appendChild(script);
+                        });
+                        App.engine.pyodide = await loadPyodide();
+                    } catch (e) {
+                        throw new Error("Failed to load Python Runtime: " + e.message);
+                    }
+                },
+                
+                initKaboom: async () => {
+                    if (App.engine.kaboomLoaded) return;
+                    try {
+                        await new Promise((resolve, reject) => {
+                             const script = document.createElement('script');
+                             script.src = "https://unpkg.com/kaboom@3000.0.1/dist/kaboom.js";
+                             script.onload = () => {
+                                 App.engine.kaboomLoaded = true;
+                                 resolve();
+                             };
+                             script.onerror = reject;
+                             document.head.appendChild(script);
+                        });
+                    } catch(e) {
+                        throw new Error("Failed to load Kaboom.js: " + e.message);
+                    }
+                },
+
+                start: async (userCode, language) => {
+                    const canvas = document.getElementById('gameCanvas');
+                    if (!canvas) return;
+
+                    // Initialize window.keys safely for all engines
+                    window.keys = {};
+
+                    // Common Input Handling
+                    const keyHandler = (e, status) => {
+                        window.keys[e.key] = status; 
+                        window.keys[e.code] = status; 
+                        if(["ArrowUp","ArrowDown","ArrowLeft","ArrowRight","Space"].includes(e.code)) e.preventDefault();
+                    };
+                    window.onkeydown = (e) => keyHandler(e, true);
+                    window.onkeyup = (e) => keyHandler(e, false);
+
+                    // Touch Bindings
+                    document.querySelectorAll('.d-pad-btn, .action-btn').forEach(btn => {
+                        const code = btn.dataset.key;
+                        const startEvents = ['mousedown', 'touchstart'];
+                        const endEvents = ['mouseup', 'touchend', 'touchcancel'];
+
+                        const triggerKey = (key, type) => {
+                             // Direct update for JS/Py
+                             window.keys[key] = (type === 'keydown');
+                             // Dispatch event for Kaboom/Others
+                             const event = new KeyboardEvent(type, { key: key, code: key });
+                             window.dispatchEvent(event);
+                        };
+
+                        startEvents.forEach(event => {
+                            btn.addEventListener(event, (e) => { 
+                                e.preventDefault(); 
+                                btn.classList.add('active'); 
+                                triggerKey(code, 'keydown');
+                            }, {passive: false});
+                        });
+                        
+                        endEvents.forEach(event => {
+                            btn.addEventListener(event, (e) => { 
+                                e.preventDefault(); 
+                                btn.classList.remove('active'); 
+                                triggerKey(code, 'keyup');
+                            }, {passive: false});
+                        });
+                    });
+
+                    App.engine.running = true;
+
+                    try {
+                        if (language === 'kaboom') {
+                             await App.engine.initKaboom();
+                             
+                             // Kaboom Init
+                             window.kaboom({
+                                 canvas: canvas,
+                                 width: 800,
+                                 height: 600,
+                                 scale: 1,
+                                 global: true, 
+                                 background: [0, 0, 0], 
+                             });
+                             
+                             // Execute user code
+                             const shimmedCode = userCode;
+                             const blob = new Blob([shimmedCode], { type: 'text/javascript' });
+                             const url = URL.createObjectURL(blob);
+                             const script = document.createElement('script');
+                             script.type = 'module';
+                             script.src = url;
+                             if (App.engine.scriptElement) App.engine.scriptElement.remove();
+                             App.engine.scriptElement = script;
+                             document.body.appendChild(script);
+                             
+                        } else {
+                            // --- Standard JS / Python Init ---
+                            window.width = canvas.width;
+                            window.height = canvas.height;
+                            window.ctx = canvas.getContext('2d');
+                            window.keys.get = (key) => window.keys[key];
+                            window.gameLoop = null; 
+
+                            // Initialize Helpers
+                            const helpers = App.engine.setupCanvasHelpers(window.ctx);
+
+                            if (language === 'python') {
+                                await App.engine.initPython();
+                                
+                                // Expose JS globals to Python
+                                App.engine.pyodide.globals.set("ctx", window.ctx);
+                                App.engine.pyodide.globals.set("width", window.width);
+                                App.engine.pyodide.globals.set("height", window.height);
+                                App.engine.pyodide.globals.set("keys", window.keys); 
+
+                                // Expose Helpers to Python
+                                App.engine.pyodide.globals.set("rect", helpers.rect);
+                                App.engine.pyodide.globals.set("circle", helpers.circle);
+                                App.engine.pyodide.globals.set("line", helpers.line);
+                                App.engine.pyodide.globals.set("text", helpers.text);
+                                App.engine.pyodide.globals.set("clear", helpers.clear);
+
+                                App.engine.pyodide.runPython(userCode);
+                                
+                                if (!App.engine.pyodide.globals.get('game_loop')) {
+                                    throw new Error("Python code must define 'def game_loop():'");
+                                }
+                                App.engine.startLoop('python');
+
+                            } else {
+                                // --- JavaScript ---
+                                
+                                // Inject a helper to attach 'gameLoop' to 'window' if defined locally
+                                const shimmedCode = userCode + "\n\ntry { if (typeof gameLoop !== 'undefined' && typeof window.gameLoop === 'undefined') { window.gameLoop = gameLoop; } } catch(e) { console.log('Auto-attach shim skipped'); }";
+                                
+                                const blob = new Blob([shimmedCode], { type: 'text/javascript' });
+                                const url = URL.createObjectURL(blob);
+                                
+                                const script = document.createElement('script');
+                                script.type = 'module';
+                                script.src = url;
+                                script.onerror = (e) => {
+                                    UI.notify("Script Error: Check console/imports", "error");
+                                    console.error("Script Load Error:", e);
+                                };
+                                
+                                if (App.engine.scriptElement) App.engine.scriptElement.remove();
+                                App.engine.scriptElement = script;
+                                document.body.appendChild(script);
+
+                                // Wait for module to define window.gameLoop
+                                let attempts = 0;
+                                const checkInterval = setInterval(() => {
+                                    if (!App.engine.running) { clearInterval(checkInterval); return; }
+                                    
+                                    if (typeof window.gameLoop === 'function') {
+                                        clearInterval(checkInterval);
+                                        App.engine.startLoop('javascript');
+                                    } else {
+                                        attempts++;
+                                        if (attempts > 30) { // 3 seconds timeout
+                                            clearInterval(checkInterval);
+                                            UI.notify("Boot Error: window.gameLoop not found. Did you define it?", "error");
+                                        }
+                                    }
+                                }, 100);
+                            }
+                        }
+
+                    } catch (e) {
+                        UI.notify("Boot Error: " + e.message, "error");
+                        console.error("Engine Boot Error:", e);
+                        App.showHome();
+                    }
+                },
+
+                startLoop: (lang) => {
+                    let lastTime = 0;
+                    const loop = (timestamp) => {
+                        if (!App.engine.running) return;
+                        
+                        // Limit frame rate to ~60 FPS
+                        const elapsed = timestamp - lastTime;
+                        if (elapsed > 1000/60) {
+                            lastTime = timestamp - (elapsed % (1000/60));
+                            try {
+                                if (lang === 'python') {
+                                    App.engine.pyodide.runPython("try:\n  game_loop()\nexcept Exception as e:\n  import js\n  js.console.error('Python Runtime Error:', str(e))\n  js.window.app.engine.handleRuntimeError(str(e))");
+                                } else {
+                                    if (window.gameLoop) window.gameLoop();
+                                }
+                            } catch (err) {
+                                App.engine.handleRuntimeError(err.message);
+                            }
+                        }
+                        App.engine.animId = requestAnimationFrame(loop);
+                    };
+                    App.engine.animId = requestAnimationFrame(loop);
+                },
+
+                handleRuntimeError: (message) => {
+                    App.engine.running = false;
+                    const errDiv = document.getElementById('runtime-error');
+                    if(errDiv) {
+                        errDiv.innerText = "RUNTIME ERROR: " + message;
+                        errDiv.classList.remove('hidden');
+                    }
+                    console.error("Game Runtime Error: ", message);
+                },
+
+                stop: () => {
+                    App.engine.running = false;
+                    if (App.engine.animId) cancelAnimationFrame(App.engine.animId);
+                    if (App.engine.scriptElement) {
+                        App.engine.scriptElement.remove();
+                        App.engine.scriptElement = null;
+                    }
+                    window.onkeydown = null;
+                    window.onkeyup = null;
+                    window.keys = {};
+                }
+            }
+        };
+
+        window.onerror = function(message, source, lineno, colno, error) {
+            if(message && message.includes("ResizeObserver")) return; 
+            if (!App.engine.running) UI.showError("CRITICAL EXCEPTION", `Line ${lineno}: ${message}`);
+        };
+
+        window.app = App;
+        App.init();
+
+    </script>
+</body>
+</html>
